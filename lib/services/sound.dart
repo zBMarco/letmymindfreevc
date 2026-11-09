@@ -13,6 +13,8 @@ class SoundEngine {
 
   static const _sr = 32000;
   final Map<String, String> _files = {};
+  final Map<String, Uint8List> _bytes = {}; // web: played from memory
+  bool _humPlaying = false;
   final List<AudioPlayer> _fx = [];
   int _next = 0;
   AudioPlayer? _hum;
@@ -21,17 +23,20 @@ class SoundEngine {
   bool _ready = false;
 
   Future<void> init() async {
-    if (kIsWeb) return;
     try {
-      await AudioPlayer.global.setAudioContext(
-        AudioContextConfig(focus: AudioContextConfigFocus.mixWithOthers, respectSilence: true).build(),
-      );
-      final dir = await getTemporaryDirectory();
       final banks = await compute(renderAllSounds, 0);
-      for (final e in banks.entries) {
-        final f = File('${dir.path}/estrella_${e.key}.wav');
-        await f.writeAsBytes(e.value, flush: true);
-        _files[e.key] = f.path;
+      if (kIsWeb) {
+        _bytes.addAll(banks);
+      } else {
+        await AudioPlayer.global.setAudioContext(
+          AudioContextConfig(focus: AudioContextConfigFocus.mixWithOthers, respectSilence: true).build(),
+        );
+        final dir = await getTemporaryDirectory();
+        for (final e in banks.entries) {
+          final f = File('${dir.path}/estrella_${e.key}.wav');
+          await f.writeAsBytes(e.value, flush: true);
+          _files[e.key] = f.path;
+        }
       }
       for (var i = 0; i < 4; i++) {
         final p = AudioPlayer();
@@ -46,16 +51,32 @@ class SoundEngine {
     }
   }
 
+  Source? _src(String name) {
+    if (kIsWeb) {
+      final b = _bytes[name];
+      return b == null ? null : BytesSource(b, mimeType: 'audio/wav');
+    }
+    final path = _files[name];
+    return path == null ? null : DeviceFileSource(path);
+  }
+
   Future<void> play(String name, {double volume = 1}) async {
     if (!_ready || !enabled) return;
-    final path = _files[name];
-    if (path == null) return;
+    final src = _src(name);
+    if (src == null) return;
     final p = _fx[_next++ % _fx.length];
     try {
       await p.stop();
       await p.setVolume(volume);
-      await p.play(DeviceFileSource(path));
+      await p.play(src);
     } catch (_) {}
+    // Safari only lets audio start after a tap, so the hum may have been
+    // refused at launch; every tap-driven sound retries it.
+    if (kIsWeb && !_humPlaying && _humLevel >= 0) {
+      final lvl = _humLevel;
+      _humLevel = -2;
+      setHum(lvl);
+    }
   }
 
   /// Ambient hum of the star. level: 0..4 (radiant..at the limit), -1 = silence (nebula / off).
@@ -66,13 +87,17 @@ class SoundEngine {
     _humLevel = target;
     final h = _hum!;
     try {
-      await _fade(h, 0, 400);
+      if (_humPlaying) await _fade(h, 0, 400);
       await h.stop();
+      _humPlaying = false;
       if (target < 0) return;
       await h.setVolume(0);
-      await h.play(DeviceFileSource(_files['hum$target']!));
+      await h.play(_src('hum$target')!);
+      _humPlaying = true;
       await _fade(h, .55, 900);
-    } catch (_) {}
+    } catch (_) {
+      _humPlaying = false;
+    }
   }
 
   Future<void> _fade(AudioPlayer p, double to, int ms) async {

@@ -42,19 +42,7 @@ class AppStore extends ChangeNotifier {
     final raw = _prefs!.getString(_key);
     if (raw != null) {
       try {
-        final j = jsonDecode(raw) as Map<String, dynamic>;
-        for (final t in (j['tasks'] as List? ?? [])) {
-          final task = Task.fromJson(Map<String, dynamic>.from(t));
-          tasks[task.id] = task;
-        }
-        for (final c in (j['cats'] as List? ?? [])) {
-          final cat = TaskType.fromJson(Map<String, dynamic>.from(c));
-          cats[cat.id] = cat;
-        }
-        if (j['star'] != null) star = StarState.fromJson(Map<String, dynamic>.from(j['star']));
-        sound = j['sound'] as bool? ?? true;
-        haptics = j['haptics'] as bool? ?? true;
-        lastCat = j['lastCat'] as String?;
+        _apply(jsonDecode(raw) as Map<String, dynamic>);
       } catch (e) {
         debugPrint('No se pudieron leer los datos: $e');
       }
@@ -72,16 +60,59 @@ class AppStore extends ChangeNotifier {
     super.dispose();
   }
 
-  void _save() {
-    final j = {
-      'tasks': tasks.values.map((t) => t.toJson()).toList(),
-      'cats': cats.values.map((c) => c.toJson()).toList(),
-      'star': star.toJson(),
-      'sound': sound,
-      'haptics': haptics,
-      'lastCat': lastCat,
-    };
-    _prefs?.setString(_key, jsonEncode(j));
+  void _apply(Map<String, dynamic> j) {
+    final newTasks = <String, Task>{};
+    final newCats = <String, TaskType>{};
+    for (final t in (j['tasks'] as List? ?? [])) {
+      final task = Task.fromJson(Map<String, dynamic>.from(t));
+      newTasks[task.id] = task;
+    }
+    for (final c in (j['cats'] as List? ?? [])) {
+      final cat = TaskType.fromJson(Map<String, dynamic>.from(c));
+      newCats[cat.id] = cat;
+    }
+    final newStar = j['star'] != null ? StarState.fromJson(Map<String, dynamic>.from(j['star'])) : StarState();
+    // Only replace once everything parsed, so a bad file never leaves half the data.
+    tasks
+      ..clear()
+      ..addAll(newTasks);
+    cats
+      ..clear()
+      ..addAll(newCats);
+    star = newStar;
+    sound = j['sound'] as bool? ?? true;
+    haptics = j['haptics'] as bool? ?? true;
+    lastCat = j['lastCat'] as String?;
+  }
+
+  Map<String, dynamic> _snapshot() => {
+        'app': 'mi_estrella',
+        'version': 1,
+        'tasks': tasks.values.map((t) => t.toJson()).toList(),
+        'cats': cats.values.map((c) => c.toJson()).toList(),
+        'star': star.toJson(),
+        'sound': sound,
+        'haptics': haptics,
+        'lastCat': lastCat,
+      };
+
+  void _save() => _prefs?.setString(_key, jsonEncode(_snapshot()));
+
+  /// Full backup as text, to keep in Files/iCloud.
+  String exportBackup() => const JsonEncoder.withIndent(' ').convert(_snapshot());
+
+  /// Replaces everything with a backup. Returns false (and changes nothing) if the text isn't one.
+  bool importBackup(String text) {
+    try {
+      final j = jsonDecode(text);
+      if (j is! Map<String, dynamic> || j['tasks'] is! List) return false;
+      _apply(j);
+    } catch (e) {
+      debugPrint('Respaldo inválido: $e');
+      return false;
+    }
+    _commit();
+    return true;
   }
 
   void _commit() {

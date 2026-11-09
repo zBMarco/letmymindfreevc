@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -550,7 +551,7 @@ class _DetailState extends State<_Detail> {
           const SizedBox(height: 10),
           Wrap(spacing: 10, runSpacing: 10, children: [
             Pill('Agregar a Calendario', small: true, color: C.sky, icon: Icons.event_rounded, onTap: () => Reminders.instance.addToCalendar(t)),
-            if (t.remind) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Te aviso 1 día, 3 h, 1 h y 30 min antes.', style: sora(12, color: C.faint))),
+            if (t.remind) Padding(padding: const EdgeInsets.only(top: 8), child: Text(kIsWeb ? 'Agrégala al Calendario y el iPhone te avisa 1 día, 3 h, 1 h y 30 min antes.' : 'Te aviso 1 día, 3 h, 1 h y 30 min antes.', style: sora(12, color: C.faint))),
           ]),
         ],
         const SizedBox(height: 16),

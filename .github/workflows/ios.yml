@@ -1,9 +1,8 @@
 name: Compilar app de iPhone (sin firmar)
 
+# Solo a mano (Actions › Run workflow): los minutos de Mac cuentan 10 veces.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 jobs:
   ios:

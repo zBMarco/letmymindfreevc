@@ -1,10 +1,12 @@
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
+import '../services/reminders.dart';
 import '../services/sound.dart';
 import '../store.dart';
 import 'pages_tasks.dart';
@@ -65,7 +67,10 @@ class _TaskSheetState extends State<_TaskSheet> {
     if (widget.edit != null) {
       s.updateTask(widget.edit!.id, title: text, catId: catId, size: size, due: hasDue ? due.millisecondsSinceEpoch : null, repeat: repeat, notes: notes.text, remind: remind);
     } else {
-      s.addTask(title: text, catId: catId, size: size, due: hasDue ? due.millisecondsSinceEpoch : null, repeat: repeat, notes: notes.text, remind: remind);
+      final t = s.addTask(title: text, catId: catId, size: size, due: hasDue ? due.millisecondsSinceEpoch : null, repeat: repeat, notes: notes.text, remind: remind);
+      // On the web, the iPhone Calendar is what sends the reminders; hand it the event
+      // while we're still inside the tap (Safari only allows it then).
+      if (kIsWeb && hasDue && remind) Reminders.instance.addToCalendar(t);
       SoundEngine.instance.play('add', volume: .8);
       if (s.haptics) HapticFeedback.lightImpact();
     }
@@ -198,7 +203,7 @@ class _TaskSheetState extends State<_TaskSheet> {
                         setState(() => remind = v);
                       }),
                     ]),
-                    Text('Notificaciones 1 día, 3 h, 1 h y 30 min antes, y al vencer. Si se vence, pesa el doble.', style: sora(12.5, color: C.faint, height: 1.4)),
+                    Text(kIsWeb ? 'Al agregarla se abre tu Calendario: acepta el evento y el iPhone te avisa 1 día, 3 h, 1 h y 30 min antes, y al vencer. Si se vence, pesa el doble.' : 'Notificaciones 1 día, 3 h, 1 h y 30 min antes, y al vencer. Si se vence, pesa el doble.', style: sora(12.5, color: C.faint, height: 1.4)),
                   ],
                 ]),
                 const SizedBox(height: 12),

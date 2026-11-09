@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
+import '../services/platform/save_file.dart';
 import '../services/reminders.dart';
 import '../services/sound.dart';
 import '../store.dart';
@@ -65,6 +67,36 @@ class _TypesPageState extends State<TypesPage> {
       ),
     );
     if (yes == true) store.deleteCat(c.id);
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      margin: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).padding.bottom + 90),
+      backgroundColor: const Color(0xE6181A38),
+      content: Text(msg, style: sora(14)),
+    ));
+  }
+
+  Future<void> _restore() async {
+    final text = await pickTextFile();
+    if (text == null || !mounted) return;
+    final yes = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoTheme(
+        data: const CupertinoThemeData(brightness: Brightness.dark),
+        child: CupertinoAlertDialog(
+          title: const Text('¿Restaurar este respaldo?'),
+          content: const Text('Reemplaza todas tus tareas, tipos y tu estrella actuales.'),
+          actions: [
+            CupertinoDialogAction(child: const Text('Cancelar'), onPressed: () => Navigator.pop(ctx, false)),
+            CupertinoDialogAction(isDestructiveAction: true, child: const Text('Restaurar'), onPressed: () => Navigator.pop(ctx, true)),
+          ],
+        ),
+      ),
+    );
+    if (yes != true || !mounted) return;
+    _toast(store.importBackup(text) ? 'Listo, respaldo restaurado.' : 'Ese archivo no es un respaldo de Mi Estrella.');
   }
 
   @override
@@ -170,20 +202,37 @@ class _TypesPageState extends State<TypesPage> {
             Text('Cuánta carga aguanta antes de explotar. Una tarea Grande pesa 3, una Monstruo pesa 5.', style: sora(13, color: C.faint, height: 1.4)),
             const SizedBox(height: 14),
             Row(children: [Expanded(child: Text('Sonido', style: sora(16))), Toggle(value: store.sound, onChanged: store.setSound)]),
-            Row(children: [Expanded(child: Text('Vibración', style: sora(16))), Toggle(value: store.haptics, onChanged: store.setHaptics)]),
-            const SizedBox(height: 8),
-            Pill('Permitir notificaciones', small: true, color: C.sky, icon: Icons.notifications_active_outlined, onTap: () async {
-              final ok = await Reminders.instance.requestPermission();
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                behavior: SnackBarBehavior.floating,
-                margin: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).padding.bottom + 90),
-                backgroundColor: const Color(0xE6181A38),
-                content: Text(ok ? 'Listo. Te avisaré antes de cada fecha límite.' : 'Actívalas en Ajustes del iPhone › Mi Estrella › Notificaciones.', style: sora(14)),
-              ));
-            }),
+            if (!kIsWeb) ...[
+              Row(children: [Expanded(child: Text('Vibración', style: sora(16))), Toggle(value: store.haptics, onChanged: store.setHaptics)]),
+              const SizedBox(height: 8),
+              Pill('Permitir notificaciones', small: true, color: C.sky, icon: Icons.notifications_active_outlined, onTap: () async {
+                final ok = await Reminders.instance.requestPermission();
+                if (!context.mounted) return;
+                _toast(ok ? 'Listo. Te avisaré antes de cada fecha límite.' : 'Actívalas en Ajustes del iPhone › Mi Estrella › Notificaciones.');
+              }),
+            ],
           ]),
         ),
+        if (kIsWeb) ...[
+          const SizedBox(height: 12),
+          Glass(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('RESPALDO', style: label()),
+              const SizedBox(height: 8),
+              Text('Tus datos viven en este iPhone. Guarda un respaldo de vez en cuando en Archivos o iCloud; si borras la app del inicio, se borran.', style: sora(13, color: C.faint, height: 1.4)),
+              const SizedBox(height: 12),
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                Pill('Guardar respaldo', small: true, color: C.sky, icon: Icons.ios_share_rounded, onTap: () async {
+                  final d = DateTime.now();
+                  final name = 'mi-estrella-${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}.json';
+                  final ok = await saveTextFile(name, 'application/json', store.exportBackup(), share: true);
+                  if (!ok && context.mounted) _toast('No se pudo guardar el respaldo.');
+                }),
+                Pill('Restaurar', small: true, icon: Icons.restore_rounded, onTap: _restore),
+              ]),
+            ]),
+          ),
+        ],
       ],
     );
   }

@@ -6,6 +6,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models.dart';
+import 'platform/save_file.dart';
 
 /// Local notifications scheduled on the iPhone itself (no server needed),
 /// plus "add to Calendar" through the native iOS event sheet.
@@ -89,7 +90,8 @@ class Reminders {
 
   /// Opens the native iOS "new event" sheet prefilled with the task.
   Future<bool> addToCalendar(Task t) async {
-    if (t.due == null || kIsWeb) return false;
+    if (t.due == null) return false;
+    if (kIsWeb) return saveTextFile('estrella-${t.id}.ics', 'text/calendar', icsFor(t));
     final due = DateTime.fromMillisecondsSinceEpoch(t.due!);
     final rec = switch (t.repeat) {
       Repeat.daily => cal.Recurrence(frequency: cal.Frequency.daily),
@@ -105,5 +107,54 @@ class Reminders {
       iosParams: const cal.IOSParams(reminder: Duration(hours: 1)),
       recurrence: rec,
     ));
+  }
+
+  /// Web version: an .ics event whose alarms make the iPhone Calendar do the
+  /// reminding (a web page can't schedule notifications on its own).
+  @visibleForTesting
+  static String icsFor(Task t) {
+    String stamp(DateTime d) {
+      final u = d.toUtc();
+      String two(int n) => n.toString().padLeft(2, '0');
+      return '${u.year}${two(u.month)}${two(u.day)}T${two(u.hour)}${two(u.minute)}${two(u.second)}Z';
+    }
+
+    String esc(String v) => v.replaceAll('\\', '\\\\').replaceAll(';', '\\;').replaceAll(',', '\\,').replaceAll('\n', '\\n');
+    final due = DateTime.fromMillisecondsSinceEpoch(t.due!);
+    final rule = switch (t.repeat) {
+      Repeat.daily => 'RRULE:FREQ=DAILY',
+      Repeat.weekly => 'RRULE:FREQ=WEEKLY',
+      Repeat.monthly => 'RRULE:FREQ=MONTHLY',
+      Repeat.none => null,
+    };
+    final alarms = [
+      for (final (offset, label) in _offsets)
+        [
+          'BEGIN:VALARM',
+          'ACTION:DISPLAY',
+          'DESCRIPTION:${esc('$label: ${t.title}')}',
+          // Relative to the end (the deadline), so "Vence ahora" fires at the deadline.
+          'TRIGGER;RELATED=END:${offset == Duration.zero ? 'PT0M' : '-P${offset.inDays > 0 ? '${offset.inDays}D' : 'T${offset.inMinutes}M'}'}',
+          'END:VALARM',
+        ].join('\r\n'),
+    ];
+    return [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Mi Estrella//ES',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      'UID:${t.id}@mi-estrella',
+      'DTSTAMP:${stamp(DateTime.now())}',
+      'DTSTART:${stamp(due.subtract(const Duration(minutes: 30)))}',
+      'DTEND:${stamp(due)}',
+      'SUMMARY:${esc('★ ${t.title}')}',
+      'DESCRIPTION:${esc('${t.notes.isNotEmpty ? '${t.notes}\n\n' : ''}Suelta esta carga de tu estrella.')}',
+      ?rule,
+      if (t.remind) ...alarms,
+      'END:VEVENT',
+      'END:VCALENDAR',
+      '',
+    ].join('\r\n');
   }
 }
