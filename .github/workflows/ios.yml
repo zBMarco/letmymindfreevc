@@ -1,0 +1,35 @@
+name: Compilar app de iPhone (sin firmar)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Compilar
+        run: flutter build ios --release --no-codesign
+
+      - name: Empaquetar .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr MiEstrella.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MiEstrella-ipa
+          path: MiEstrella.ipa
+          retention-days: 30
