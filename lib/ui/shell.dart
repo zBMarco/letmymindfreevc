@@ -60,6 +60,20 @@ class _ShellState extends State<Shell> {
     store.addTask(title: 'Ejemplo: pagar la luz', catId: c[2].id, size: 3);
     store.addTask(title: 'Ejemplo: lavar ropa', catId: c[1].id, size: 2);
     store.addTask(title: 'Ejemplo: renovar pasaporte', catId: c[2].id, size: 5);
+    store.addCat('Salud', 0xFF8EF0B8);
+    store.addCat('Dinero', 0xFFC3A6FF);
+    final c2 = store.sortedCats;
+    final pres = store.addTask(title: 'Ejemplo: armar presentación', catId: c2[0].id, size: 1, due: nowMs() + 2 * 86400000);
+    for (final s in ['Índice', 'Gráficas', 'Ensayar']) {
+      store.addSub(pres.id, s);
+    }
+    final med = store.addTask(title: 'Ejemplo: chequeo médico', catId: c2[3].id, size: 1);
+    store.addSub(med.id, 'Agendar cita');
+    // finished tasks become rocks in the asteroid belt
+    for (var i = 0; i < 40; i++) {
+      final t = store.addTask(title: 'Ejemplo: hecha $i', catId: c2[i % c2.length].id, size: 1 + i % 4);
+      store.complete(t.id);
+    }
   }
 
   void _syncFx() {

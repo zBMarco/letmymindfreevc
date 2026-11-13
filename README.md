@@ -11,7 +11,10 @@ To-do para soltar lo que te estresa. Cada tarea pendiente le suma carga a tu est
 - **Agregar al Calendario de iOS** desde el detalle de la tarea.
 - **Sonido sintetizado** (zumbido de la estrella, llamarada, supernova, renacimiento) y **vibración** del iPhone.
 - **Progreso**: racha de días, tareas por día, tiempos, avance por tipo e historial.
-- Los datos se guardan en el teléfono.
+- **Sistema solar** (`shaders/planet.frag`, `lib/star/solar_system.dart`): cada tipo de tarea es un planeta (rocoso, gigante gaseoso con anillos o helado) iluminado por la estrella. Crece con su carga, y su órbita se acerca a la estrella cuando se acerca la fecha límite. Cada subtarea pendiente es una luna, y cada tarea terminada queda como una roca en el cinturón de asteroides. En la supernova los planetas salen disparados y al renacer se vuelven a formar.
+- **Estrella con temperatura real por punto**: color de cuerpo negro (ley de Planck) en cada gránulo, mancha y borde, tono fílmico ACES y resplandor de cámara. Las llamaradas son tubos de plasma con volumen.
+- **Funciona sin internet** en la versión web (`web/sw.js`) después de abrirla una vez.
+- Los datos se guardan en el teléfono. Puedes exportar e importar un respaldo desde *Tipos*.
 
 ## Probarla en tu computadora
 
@@ -19,7 +22,7 @@ To-do para soltar lo que te estresa. Cada tarea pendiente le suma carga a tu est
 flutter run -d chrome
 ```
 
-Parámetros útiles solo en el navegador: `?demo=1` (tareas de ejemplo), `?tab=1` (abre la estrella), `?ft=0.5` (congela una llamarada), `?icon=1` (dibuja el ícono).
+Parámetros útiles solo en el navegador: `?demo=1` (tareas de ejemplo, con lunas y asteroides), `?sw=1` (activa el modo sin conexión en localhost), `?tab=1` (abre la estrella), `?ft=0.5` (congela una llamarada), `?icon=1` (dibuja el ícono).
 
 ## Instalarla en tu iPhone gratis
 
@@ -72,3 +75,7 @@ test/                        pruebas de la lógica y del sonido
 flutter analyze
 flutter test
 ```
+
+## Prototipos
+
+`prototipos/` guarda las primeras versiones en un solo archivo HTML (*Mi Estrella* y el *Laboratorio Estelar*). No se publican; son solo de referencia.

@@ -1,15 +1,15 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 
 import '../models.dart';
-import '../star/star_fx.dart';
+import '../star/solar_system.dart';
 import '../store.dart';
 import 'pages_tasks.dart';
 import 'theme.dart';
 
 const _bottomPad = 170.0;
+const _kindName = {PlanetKind.rocky: 'Rocoso', PlanetKind.gas: 'Gigante gaseoso', PlanetKind.ice: 'Helado'};
 
 class StarPage extends StatelessWidget {
   final AppStore store;
@@ -22,7 +22,7 @@ class StarPage extends StatelessWidget {
     final nebula = store.star.phase == Phase.nebula;
     final cur = store.level;
     final color = Color(cur.color);
-    final cats = store.sortedCats;
+    final solar = SolarScene.of(store);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, _bottomPad),
       children: [
@@ -36,7 +36,7 @@ class StarPage extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: Stack(children: [
-              Positioned.fill(child: _Observatory(store: store)),
+              Positioned.fill(child: SolarSystem(store: store)),
               Positioned(
                 top: 14,
                 left: 14,
@@ -101,23 +101,36 @@ class StarPage extends StatelessWidget {
         const SizedBox(height: 14),
         Glass(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('PLANETAS · TUS TIPOS DE TAREAS', style: label()),
+            Text('TU SISTEMA SOLAR', style: label()),
             const SizedBox(height: 12),
-            if (cats.isEmpty)
-              Text('Crea tipos de tareas y aparecerán girando alrededor de tu estrella.', style: sora(13, color: C.faint))
-            else ...[
-              for (final c in cats)
+            if (solar.planets.isEmpty)
+              Text('Crea tipos de tareas y aparecerán como planetas girando alrededor de tu estrella.', style: sora(13, color: C.faint))
+            else
+              for (final p in solar.planets)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Row(children: [
-                    Orb(color: Color(c.color)),
+                    Orb(color: p.color),
                     const SizedBox(width: 12),
-                    Expanded(child: Text(c.name, style: sora(15, w: FontWeight.w500))),
-                    Text('${store.pctOf(store.catLoad(c.id))}% de carga', style: mono(12, color: C.muted)),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(p.name, style: sora(15, w: FontWeight.w500)),
+                        Text(
+                          '${_kindName[p.kind]}${p.ring ? ' con anillos' : ''} · ${p.moons == 0 ? 'sin lunas' : p.moons == 1 ? '1 luna' : '${p.moons} lunas'} · ${dueLabel(p.nextDue)}',
+                          style: sora(12, color: p.urgency > .6 ? C.warn : C.faint),
+                        ),
+                      ]),
+                    ),
+                    Text('${store.pctOf(p.load)}%', style: mono(12, color: C.muted)),
                   ]),
                 ),
-              Text('Mientras más carga tiene un tipo, más grande se ve su planeta.', style: sora(13, color: C.faint)),
-            ],
+            const SizedBox(height: 4),
+            Text(
+              'Cada tipo de tarea es un planeta: crece con su carga y su órbita se acerca a la estrella cuando se acerca la fecha límite. '
+              'Cada subtarea pendiente es una luna. Cada tarea que terminas queda como una roca en el cinturón de asteroides '
+              '(${solar.belt.length}${solar.belt.length >= maxRocks ? '+' : ''}). Si la estrella explota, los planetas salen disparados.',
+              style: sora(13, color: C.faint, height: 1.45),
+            ),
           ]),
         ),
         const SizedBox(height: 14),
@@ -150,43 +163,6 @@ class _RecDotState extends State<_RecDot> with SingleTickerProviderStateMixin {
         opacity: Tween(begin: .3, end: 1.0).animate(c),
         child: Container(width: 7, height: 7, decoration: const BoxDecoration(shape: BoxShape.circle, color: C.hot, boxShadow: [BoxShadow(color: C.hot, blurRadius: 8)])),
       );
-}
-
-/// Star + orbiting planets. Back half of each orbit is painted under the star, front half over it.
-class _Observatory extends StatefulWidget {
-  final AppStore store;
-  const _Observatory({required this.store});
-  @override
-  State<_Observatory> createState() => _ObservatoryState();
-}
-
-class _ObservatoryState extends State<_Observatory> with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
-  final _t = ValueNotifier<double>(0);
-  @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker((e) => _t.value = e.inMicroseconds / 1e6)..start();
-  }
-
-  @override
-  void dispose() {
-    _ticker.dispose();
-    _t.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.store;
-    final planets = s.star.phase == Phase.nebula ? <(Color, double)>[] : s.sortedCats.map((c) => (Color(c.color), s.catLoad(c.id))).toList();
-    final r = starRadiusFor(s.load);
-    return Stack(children: [
-      Positioned.fill(child: ValueListenableBuilder<double>(valueListenable: _t, builder: (_, t, _) => CustomPaint(painter: PlanetsPainter(planets, t, r, false)))),
-      const Positioned.fill(child: StarView(detail: 1)),
-      Positioned.fill(child: ValueListenableBuilder<double>(valueListenable: _t, builder: (_, t, _) => CustomPaint(painter: PlanetsPainter(planets, t, r, true)))),
-    ]);
-  }
 }
 
 class _Rung extends StatelessWidget {

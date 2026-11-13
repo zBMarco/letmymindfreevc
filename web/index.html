@@ -37,6 +37,18 @@
       if (el) el.remove();
     });
   </script>
+  <script>
+    // Offline: keeps the app working without internet once it has been opened once.
+    // Off on localhost (development) unless ?sw=1, so stale files never get in the way.
+    if ('serviceWorker' in navigator &&
+        (location.hostname !== 'localhost' || new URLSearchParams(location.search).has('sw'))) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function (e) {
+          console.warn('Sin modo offline:', e);
+        });
+      });
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

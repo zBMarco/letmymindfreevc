@@ -257,63 +257,6 @@ class _SkyPainter extends CustomPainter {
   bool shouldRepaint(covariant _SkyPainter old) => old.tint != tint || old.nebula != nebula;
 }
 
-/// Planets (task types) orbiting the observatory star, drawn on top of the shader.
-class PlanetsPainter extends CustomPainter {
-  final List<(Color, double)> planets; // color, load
-  final double time;
-  final double starR; // fraction of min side
-  final bool front;
-  PlanetsPainter(this.planets, this.time, this.starR, this.front);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (planets.isEmpty) return;
-    final sz = min(size.width, size.height);
-    final c = Offset(size.width / 2, size.height / 2);
-    final R = starR * sz;
-    final maxR = sz * .47;
-    final step = min(R * .42, (maxR - R * 1.75) / max(1, planets.length));
-    const tilt = -.18;
-    for (var i = 0; i < planets.length; i++) {
-      final (color, load) = planets[i];
-      final rx = R * 1.75 + step * (i + .5), ry = rx * .32;
-      if (!front) {
-        canvas.save();
-        canvas.translate(c.dx, c.dy);
-        canvas.rotate(tilt);
-        canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: rx * 2, height: ry * 2),
-            Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1
-              ..color = Colors.white.withValues(alpha: .1));
-        canvas.restore();
-      }
-      final a = i * 2.1 + time * (.28 / (1 + i * .35));
-      final sa = sin(a);
-      if ((sa >= 0) != front) continue;
-      final ca = cos(a);
-      final x = c.dx + ca * rx * cos(tilt) - sa * ry * sin(tilt);
-      final y = c.dy + ca * rx * sin(tilt) + sa * ry * cos(tilt);
-      final pr = (3 + sqrt(load) * 3.2).clamp(3.0, 15.0) * (.85 + .15 * sa);
-      final toStar = (c - Offset(x, y));
-      final dir = toStar / max(1, toStar.distance);
-      canvas.drawCircle(
-        Offset(x, y),
-        pr,
-        Paint()
-          ..shader = RadialGradient(
-            center: Alignment(dir.dx * .5, dir.dy * .5),
-            colors: [Color.lerp(color, Colors.white, .5)!, color, Color.lerp(color, Colors.black, .82)!],
-            stops: const [0, .55, 1],
-          ).createShader(Rect.fromCircle(center: Offset(x, y), radius: pr)),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant PlanetsPainter old) => true;
-}
-
 /// Small helper so pages can rebuild every second (live timers).
 class Every extends StatefulWidget {
   final Duration period;
@@ -329,5 +272,4 @@ class _EveryState extends State<Every> {
   Widget build(BuildContext context) => StreamBuilder<int>(stream: _s, builder: (c, _) => widget.builder(c));
 }
 
-double starRadiusFor(double load) => .16 * (.8 + .55 * min(load, 1.1));
 StarFx get fx => StarFx.instance;

@@ -18,11 +18,17 @@ class StarFx extends ChangeNotifier {
   static final instance = StarFx._();
 
   static ui.FragmentProgram? program;
+  static ui.FragmentProgram? planetProgram;
   static Future<void> loadShader() async {
     try {
       program = await ui.FragmentProgram.fromAsset('shaders/star.frag');
     } catch (e) {
       debugPrint('Shader no disponible: $e');
+    }
+    try {
+      planetProgram = await ui.FragmentProgram.fromAsset('shaders/planet.frag');
+    } catch (e) {
+      debugPrint('Shader de planetas no disponible: $e');
     }
   }
 
@@ -37,6 +43,40 @@ class StarFx extends ChangeNotifier {
   bool reduced = false;
   /// Browser preview only: freezes a flare at this progress (0..1).
   double? debugFlareT;
+
+  /// Smoothed load the star is drawn with (radius and color follow this, not the raw store value).
+  double get smoothLoad => _sL;
+
+  /// Progress (0..1) of the current explosion or rebirth; 0 in the other modes.
+  double get phaseK => switch (mode) {
+        StarMode.exploding => ((time - _t0) / 3.2).clamp(0.0, 1.0),
+        StarMode.reborn => ((time - _t0) / 2.6).clamp(0.0, 1.0),
+        _ => 0.0,
+      };
+
+  /// Light the star casts on its planets (same blackbody ramp as the shader's starColor).
+  static List<double> lightColor(double l) {
+    const c = [
+      [0.60, 0.74, 1.00],
+      [1.00, 0.88, 0.66],
+      [1.00, 0.60, 0.28],
+      [1.00, 0.33, 0.13],
+      [0.85, 0.15, 0.06],
+    ];
+    List<double> mix(int i, double k) => [for (var j = 0; j < 3; j++) c[i][j] + (c[i + 1][j] - c[i][j]) * k.clamp(0.0, 1.0)];
+    final List<double> out;
+    if (l < .35) {
+      out = mix(0, l / .35);
+    } else if (l < .6) {
+      out = mix(1, (l - .35) / .25);
+    } else if (l < .85) {
+      out = mix(2, (l - .6) / .25);
+    } else {
+      out = mix(3, (l - .85) / .3);
+    }
+    // planets see the star a bit whiter than it looks in the sky
+    return [for (final v in out) .35 + .75 * v];
+  }
 
   void sync({required double load, required bool nebula, required double seed}) {
     targetLoad = load.clamp(0, 1.15);

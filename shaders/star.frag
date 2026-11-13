@@ -74,6 +74,28 @@ vec3 starColor(float L){
   return mix(c3, c4, clamp((L-0.85)/0.3, 0.0, 1.0));
 }
 
+// Blackbody color of temperature T (Kelvin), fit to Planck's law (Tanner Helland), 0..1 per channel.
+vec3 blackbody(float T){
+  float t = T/100.0;
+  float r = t <= 66.0 ? 1.0 : 1.292936*pow(t - 60.0, -0.1332047592);
+  float g = t <= 66.0 ? 0.39008157*log(t) - 0.63184144 : 1.129890861*pow(t - 60.0, -0.0755148492);
+  float b = t >= 66.0 ? 1.0 : (t <= 19.0 ? 0.0 : 0.543206789*log(t - 10.0) - 1.19625408);
+  return clamp(vec3(r, g, b), 0.0, 1.0);
+}
+
+// Effective surface temperature by stress level: blue-white -> Sun -> orange -> red giant.
+float starTemp(float L){
+  if (L < 0.35) return mix(9500.0, 5800.0, L/0.35);
+  if (L < 0.60) return mix(5800.0, 4400.0, (L - 0.35)/0.25);
+  if (L < 0.85) return mix(4400.0, 3400.0, (L - 0.60)/0.25);
+  return mix(3400.0, 2700.0, clamp((L - 0.85)/0.3, 0.0, 1.0));
+}
+
+// Filmic tone curve (ACES, Narkowicz fit): highlights roll off to white instead of clipping.
+vec3 aces(vec3 x){
+  return clamp((x*(2.51*x + 0.03))/(x*(2.43*x + 0.59) + 0.14), 0.0, 1.0);
+}
+
 void main(){
   vec2 frag = FlutterFragCoord().xy;
   float px = 1.0/min(uSize.x, uSize.y);
@@ -82,6 +104,7 @@ void main(){
   float t = uTime, L = uLoad, R = max(uRadius, 0.0001);
   float agit = clamp((L - 0.42)/0.65, 0.0, 1.0);
   vec3 col = vec3(0.0);
+  float solid = 0.0;  // opaque only over the stellar disk; glow and corona are light added on top
 
   /* nebula left by the supernova, with the seed of the next star */
   if (uNebula > 0.001){
@@ -157,15 +180,24 @@ void main(){
       float mu = z;
       float limb = 1.0 - 0.6*(1.0 - mu) - 0.2*(1.0 - mu)*(1.0 - mu);
       float I = (1.25 + 0.16*big)*mix(0.84, 1.03, gran)*(1.0 - 0.42*spots - 0.42*umbra)*limb + faculae*0.22;
-      vec3 c = sc*I;
+      // Every point has its own temperature: hot rising granule centers, cooler sinking lanes,
+      // cold spots, hot faculae. Near the limb we see higher, cooler layers (gray atmosphere,
+      // T ~ ((2 + 3*mu)/5)^(1/4)), so the edge reddens on its own.
+      float T0 = starTemp(L);
+      float Tp = T0*(0.965 + 0.07*gran)*(1.0 - 0.22*spots - 0.18*umbra)*(1.0 + 0.06*faculae);
+      Tp *= pow((2.0 + 3.0*mu)/5.0, 0.35);
+      vec3 tint = clamp(blackbody(Tp)/max(blackbody(T0), vec3(0.05)), 0.0, 1.6);
+      vec3 c = sc*I*tint;
       // hot core over-exposes toward white, like a real photo of a star
       c = mix(c, vec3(1.0, 0.98, 0.94), clamp(I - 0.95, 0.0, 1.0)*0.75*z);
-      c *= mix(vec3(1.0), vec3(1.0, 0.6, 0.4), pow(1.0 - z, 2.4));
       inside = c*1.85;
     }
     float edge = 1.0 - smoothstep(R - 1.5*px, R + 1.5*px, r);
     vec3 starCol = mix(outside, inside, edge);
     starCol += vec3(1.0, 0.55, 0.38)*exp(-abs(r - R)/(R*0.012))*0.35*(0.5 + agit);
+    // bloom: bright light spilling around the disk like in a camera lens
+    float glare = exp(-d*7.0)*0.32 + 0.05/(1.0 + d*d*30.0);
+    starCol += mix(sc, vec3(1.0), 0.55)*glare*(1.0 - edge)*(1.15 - 0.5*agit);
 
     /* completion flare: coronal loops follow the field lines of a magnetic dipole buried under the
        surface, r = L*sin^2(theta). Every loop is anchored in the star. Footpoint flash, post-flare
@@ -200,7 +232,10 @@ void main(){
         float wk = 0.012 + 0.007*fk;
         float on = smoothstep(fk*0.08, fk*0.08 + 0.18, ft);
         float dl = abs(Lp - Lk);
-        arc += exp(-dl/wk)*on*(1.0 - fk*0.15);
+        // optically thin plasma tube of radius 2*wk: brightness follows the chord length through it
+        float x = dl/(2.0*wk);
+        float tube = sqrt(max(1.0 - x*x, 0.0));
+        arc += (0.7*tube + 0.45*exp(-dl/wk))*on*(1.0 - fk*0.15);
         arcGlow += exp(-dl/(wk*5.0))*on*0.25;
       }
       arc *= knots;
@@ -222,6 +257,7 @@ void main(){
     }
     if (uRingA > 0.0) starCol += mix(sc, vec3(1.0), 0.5)*exp(-abs(r - uRingR)/0.006)*uRingA;
     col += starCol*alive;
+    solid = edge*alive*(1.0 - smoothstep(0.0, 0.3, uExplode));
   }
 
   /* supernova shock shell */
@@ -238,9 +274,11 @@ void main(){
   }
 
   col += vec3(1.0, 0.97, 0.94)*uFlash*2.0;
-  col = 1.0 - exp(-col*1.35);
-  col = pow(col, vec3(0.95));
+  col = aces(col*0.8);
+  // dithering: breaks the color banding in the faint corona gradients
+  col += (hash(frag + fract(t)) - 0.5)/255.0;
+  col = max(col, vec3(0.0));
   // transparent where dark so the glass and sky show through (premultiplied output)
-  float alpha = clamp(max(col.r, max(col.g, col.b))*1.6, 0.0, 1.0);
+  float alpha = max(solid, clamp(max(col.r, max(col.g, col.b))*0.55, 0.0, 1.0));
   fragColor = vec4(col, alpha);
 }

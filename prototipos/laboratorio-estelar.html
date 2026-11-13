@@ -1,0 +1,519 @@
+<title>Laboratorio Estelar</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#04050D">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. A large glass observatory with the GPU-rendered star, its live state, then controls to test every state. Dark-only by design: the page is a night sky. */
+:root{
+  --bg:#04050D; --text:#EEF0FF; --muted:#A3A8CC; --faint:#6F75A0; --ink:#0A0B18;
+  --glass:rgba(255,255,255,.06); --line:rgba(255,255,255,.12); --line-2:rgba(255,255,255,.24);
+  --star:#FFD58A; --ok:#7CF0B5; --hot:#FF7A6B; --violet:#B79CFF; --sky:#7CC8FF;
+  --display:'Sora',system-ui,-apple-system,sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--text);font-family:var(--display);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:28px;font-weight:600;letter-spacing:-.02em;margin:0;line-height:1.1}
+.sub{color:var(--muted);margin:4px 0 0;font-size:15px}
+.scope{position:relative;aspect-ratio:1/1;border-radius:28px;overflow:hidden;border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 20px 50px rgba(0,0,0,.5);background:#000}
+.scope canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.live{position:absolute;top:14px;left:14px;background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:99px;padding:6px 12px 6px 10px;font:500 11px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;display:flex;gap:7px;align-items:center;color:var(--muted);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--hot);box-shadow:0 0 8px var(--hot);animation:rec 1.6s ease-in-out infinite}
+@keyframes rec{50%{opacity:.3}}
+.readout{position:absolute;left:18px;bottom:16px;color:var(--muted);font:400 12px/1.5 var(--mono);text-shadow:0 1px 6px #000}
+.readout b{display:block;font:600 30px/1.1 var(--display);letter-spacing:-.02em;color:var(--star);text-shadow:0 0 24px color-mix(in srgb,var(--star) 60%,transparent);transition:color .6s}
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:24px;padding:16px;display:flex;flex-direction:column;gap:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+.lbl{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.row b{font:500 18px/1 var(--mono);color:var(--star)}
+input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:8px;border-radius:99px;background:linear-gradient(90deg,#9CC2FF 0%,#FFD58A 30%,#FFA45C 55%,#FF6B5A 78%,#D7A8FF 100%);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 0 16px rgba(255,255,255,.6),0 2px 6px rgba(0,0,0,.5);border:0}
+input[type=range]::-moz-range-thumb{width:28px;height:28px;border-radius:50%;background:#fff;border:0}
+input[type=range]:focus-visible{outline:2px solid var(--star);outline-offset:6px}
+.ticks{display:grid;grid-template-columns:20fr 30fr 25fr 25fr 20fr;font:400 10px/1.2 var(--mono);color:var(--faint);text-transform:uppercase}
+.ticks span{border-left:1px solid var(--line);padding-left:4px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{border:1px solid var(--line-2);background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,.06));color:var(--text);padding:13px 14px;font:600 15px var(--display);border-radius:999px;cursor:pointer;transition:transform .15s cubic-bezier(.3,1.6,.5,1)}
+.btn:active{transform:scale(.95)}
+.btn:focus-visible{outline:2px solid var(--star);outline-offset:3px}
+.btn.go{background:rgba(124,240,181,.16);border-color:rgba(124,240,181,.5);color:var(--ok)}
+.btn.boom{background:rgba(255,122,107,.14);border-color:rgba(255,122,107,.45);color:#FFB3A8}
+.btn.full{grid-column:1/-1}
+.btn:disabled{opacity:.4}
+.minis{display:flex;gap:18px;align-items:center}
+.mini{width:72px;height:72px;border-radius:50%;flex:none}
+.minis p{margin:0;color:var(--muted);font-size:14px}
+.seeds{display:flex;gap:8px}
+.seeds i{width:14px;height:14px;border-radius:50%;border:1px solid var(--line-2)}
+.seeds i.on{background:radial-gradient(circle at 40% 40%,#fff,#9fd8ff 45%,#7b6bff);border-color:transparent;box-shadow:0 0 12px #9fd8ff}
+.legend{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.legend li{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;font-size:14px;color:var(--muted)}
+.legend b{color:var(--text);font-weight:500}
+.legend i{width:14px;height:14px;border-radius:50%;margin-top:3px;box-shadow:0 0 10px currentColor}
+.err{color:#FFB3A8}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<main>
+  <header>
+    <h1>Mi estrella</h1>
+    <p class="sub">Prueba de diseño. Mueve la carga y prueba la supernova y el renacimiento.</p>
+  </header>
+
+  <div class="scope">
+    <canvas id="gl" aria-label="Estrella animada"></canvas>
+    <span class="live">En vivo</span>
+    <div class="readout" id="readout"><b>Tranquila</b>Carga 35%</div>
+  </div>
+
+  <section class="glass">
+    <div class="row"><span class="lbl">Carga de tu estrella</span><b id="pct">35%</b></div>
+    <input type="range" id="load" min="0" max="120" value="35" aria-label="Carga de la estrella">
+    <div class="ticks"><span>Radiante</span><span>Tranquila</span><span>Inquieta</span><span>Al límite</span><span>Nova</span></div>
+    <div class="btns">
+      <button class="btn go" id="complete">Completar tarea</button>
+      <button class="btn boom" id="boom">Supernova</button>
+      <button class="btn full" id="reset">Volver a la estrella</button>
+      <button class="btn full" id="snd" aria-pressed="false">Activar sonido</button>
+    </div>
+    <div class="row" id="seedRow" hidden><span class="lbl">Para renacer</span><div class="seeds" id="seeds"></div></div>
+  </section>
+
+  <section class="glass">
+    <span class="lbl">Así se ve en el encabezado</span>
+    <div class="minis"><canvas class="mini" id="mini" width="144" height="144"></canvas><p>La versión pequeña que siempre ves arriba, en todas las pantallas.</p></div>
+  </section>
+
+  <section class="glass">
+    <span class="lbl">Qué está pasando</span>
+    <ul class="legend">
+      <li><i style="color:#9CC2FF;background:#9CC2FF"></i><span><b>Radiante:</b> azul-blanca, caliente y en calma. Superficie suave, corona tranquila.</span></li>
+      <li><i style="color:#FFD58A;background:#FFD58A"></i><span><b>Tranquila:</b> amarilla como el Sol. Plasma que hierve lento.</span></li>
+      <li><i style="color:#FFA45C;background:#FFA45C"></i><span><b>Inquieta:</b> naranja, crece, aparecen manchas y llamaradas.</span></li>
+      <li><i style="color:#FF6B5A;background:#FF6B5A"></i><span><b>Al límite:</b> gigante roja, hinchada, tiembla y lanza arcos de plasma.</span></li>
+      <li><i style="color:#D7A8FF;background:#D7A8FF"></i><span><b>Supernova:</b> explota y deja una nebulosa con una semilla de luz. Cada tarea la hace crecer hasta que renace.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(() => {
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', { antialias:false, premultipliedAlpha:false, preserveDrawingBuffer:false });
+if (!gl) { document.querySelector('.readout').innerHTML = '<b class="err">Sin WebGL</b>Este navegador no puede dibujar la estrella.'; return; }
+
+const VS = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
+const FS = `
+precision highp float;
+uniform vec2 uRes; uniform float uTime, uLoad, uRadius, uExplode, uNebula, uSeed, uFlash, uRingR, uRingA, uFlareT, uFlareA;
+uniform vec2 uOff, uShake;
+
+vec4 permute(vec4 x){ return mod(((x*34.0)+1.0)*x, 289.0); }
+vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314*r; }
+float snoise(vec3 v){
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0); const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i = floor(v + dot(v, C.yyy)); vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz); vec3 l = 1.0 - g; vec3 i1 = min(g.xyz, l.zxy); vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx; vec3 x2 = x0 - i2 + 2.0*C.xxx; vec3 x3 = x0 - 1.0 + 3.0*C.xxx;
+  i = mod(i, 289.0);
+  vec4 p = permute(permute(permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 1.0/7.0; vec3 ns = n_*D.wyz - D.xzx;
+  vec4 j = p - 49.0*floor(p*ns.z*ns.z);
+  vec4 x_ = floor(j*ns.z); vec4 y_ = floor(j - 7.0*x_);
+  vec4 x = x_*ns.x + ns.yyyy; vec4 y = y_*ns.x + ns.yyyy; vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy); vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0)*2.0 + 1.0; vec4 s1 = floor(b1)*2.0 + 1.0; vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy; vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+  vec3 p0 = vec3(a0.xy, h.x); vec3 p1 = vec3(a0.zw, h.y); vec3 p2 = vec3(a1.xy, h.z); vec3 p3 = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0); m = m*m;
+  return 42.0*dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a*snoise(p); p = p*2.03 + 17.1; a *= 0.5; } return s; }
+float fbm3(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 3; i++){ s += a*snoise(p); p = p*2.1 + 9.3; a *= 0.5; } return s; }
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
+
+vec3 starColor(float L){
+  vec3 c0 = vec3(0.60, 0.74, 1.00), c1 = vec3(1.00, 0.88, 0.66), c2 = vec3(1.00, 0.60, 0.28), c3 = vec3(1.00, 0.33, 0.13), c4 = vec3(0.85, 0.15, 0.06);
+  if (L < 0.35) return mix(c0, c1, L/0.35);
+  if (L < 0.60) return mix(c1, c2, (L-0.35)/0.25);
+  if (L < 0.85) return mix(c2, c3, (L-0.60)/0.25);
+  return mix(c3, c4, clamp((L-0.85)/0.3, 0.0, 1.0));
+}
+vec3 starfield(vec2 uv){
+  vec3 c = vec3(0.0);
+  for (int i = 0; i < 2; i++){
+    float sc = i == 0 ? 34.0 : 80.0;
+    vec2 g = uv*sc + float(i)*31.7; vec2 id = floor(g); vec2 f = fract(g) - 0.5;
+    float h = hash(id);
+    if (h > 0.92){
+      vec2 o = vec2(hash(id + 1.3), hash(id + 2.7)) - 0.5;
+      float d = length(f - o*0.7);
+      float tw = 0.55 + 0.45*sin(uTime*(0.8 + h*2.5) + h*50.0);
+      c += mix(vec3(0.75,0.82,1.0), vec3(1.0,0.9,0.8), hash(id+5.1)) * (1.0 - smoothstep(0.0, 0.08, d)) * tw * (h - 0.92) * 12.0;
+    }
+  }
+  return c;
+}
+
+void main(){
+  float px = 1.0/min(uRes.x, uRes.y);
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)*px + uShake;
+  float t = uTime, L = uLoad, R = max(uRadius, 0.0001);
+  float agit = clamp((L - 0.42)/0.65, 0.0, 1.0);
+  vec3 col = starfield(uv) * (1.0 - 0.6*uFlash);
+
+  /* nebula */
+  if (uNebula > 0.001){
+    vec3 q = vec3(uv*2.3, t*0.015);
+    float warp = fbm3(q*1.3 + 3.0);
+    float n = fbm(q + vec3(warp*1.4, warp, 0.0));
+    float n2 = fbm3(q*2.0 - vec3(warp, 0.0, t*0.01));
+    float contract = 1.0 + uSeed*0.6;
+    float fall = exp(-length(uv)*contract*2.0);
+    float dens = smoothstep(-0.25, 0.75, n) * fall;
+    vec3 nc = mix(vec3(0.95,0.25,0.55), vec3(0.45,0.30,1.0), smoothstep(-0.3, 0.4, n2));
+    nc = mix(nc, vec3(0.15,0.75,0.95), smoothstep(0.15, 0.6, n2 - n*0.4));
+    float dust = smoothstep(0.1, 0.5, fbm3(q*3.0 + 7.0));
+    col += nc * dens * (1.1 - 0.5*dust) * uNebula * 1.4;
+    float r0 = length(uv);
+    float sr = 0.012 + 0.02*uSeed;
+    float pulse = 0.85 + 0.15*sin(t*2.2);
+    col += vec3(0.85,0.92,1.0) * (exp(-r0/sr)*1.6 + exp(-r0/(sr*5.0))*0.45*pulse) * uNebula;
+    float spikes = exp(-abs(uv.x)/0.002)*exp(-abs(uv.y)/(0.05+0.06*uSeed)) + exp(-abs(uv.y)/0.002)*exp(-abs(uv.x)/(0.05+0.06*uSeed));
+    col += vec3(0.8,0.9,1.0) * spikes * 0.5 * uNebula * pulse;
+  }
+
+  /* star */
+  float alive = 1.0 - smoothstep(0.08, 0.18, uExplode);
+  if (alive > 0.001 && uRadius > 0.0005){
+    vec2 su = uv - uOff;
+    float r = length(su);
+    vec3 sc = starColor(L);
+    float a = atan(su.y, su.x);
+    vec2 dir = vec2(cos(a), sin(a));
+    float d = max(r - R, 0.0)/R;
+
+    /* corona + streamers */
+    float rays = fbm3(vec3(dir*2.2, t*0.05 + d*1.2))*0.5 + 0.5;
+    float rays2 = snoise(vec3(dir*5.5, t*0.08 - d*0.8))*0.5 + 0.5;
+    float corona = exp(-d*(4.2 - agit*1.6)) * (0.35 + 1.1*rays*rays2*(0.8 + agit*0.8));
+    float halo = exp(-d*1.4)*0.28 + exp(-d*0.5)*0.06;
+    /* prominences / flares at the limb */
+    float band = smoothstep(0.0, 0.015, d) * (1.0 - smoothstep(0.03, 0.12 + agit*0.35, d));
+    float loops = smoothstep(0.62 - agit*0.3, 0.95, fbm3(vec3(dir*3.5, t*0.07) + vec3(d*5.0, 0.0, 0.0)) + 0.35);
+    float prom = band * loops * (0.25 + agit*1.8);
+    vec3 cc = mix(sc, vec3(1.0), 0.3);
+    vec3 outside = cc*(corona + halo)*1.05 + vec3(1.0, 0.38, 0.22)*prom*1.6;
+
+    /* surface */
+    vec3 inside = vec3(0.0);
+    if (r < R + 2.0*px){
+      float rr = min(r/R, 1.0);
+      float z = sqrt(max(1.0 - rr*rr, 0.0));
+      vec3 n = vec3(su/R, z);
+      float ang = t*0.035;
+      n.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * n.xz;
+      float speed = 0.04 + agit*0.22;
+      float big = fbm(n*2.0 + vec3(0.0, 0.0, t*speed*0.6));
+      float lanes = abs(snoise(n*16.0 + vec3(t*speed, big, 0.0)));
+      float lanes2 = abs(snoise(n*32.0 - vec3(0.0, t*speed*1.3, 0.0)));
+      float gran = smoothstep(0.0, 0.3, lanes)*0.7 + smoothstep(0.0, 0.25, lanes2)*0.3;
+      float spots = smoothstep(0.42, 0.62, snoise(n*2.6 + vec3(0.0, t*0.015, 3.0))) * smoothstep(0.35, 0.9, L);
+      float umbra = smoothstep(0.52, 0.66, snoise(n*2.6 + vec3(0.0, t*0.015, 3.0))) * smoothstep(0.35, 0.9, L);
+      float faculae = smoothstep(0.3, 0.7, big) * pow(1.0 - z, 1.5);
+      float limb = 1.0 - 0.6*(1.0 - z) - 0.2*(1.0 - z*z);
+      float I = (1.2 + 0.4*big) * mix(0.68, 1.0, gran) * (1.0 - 0.55*spots - 0.35*umbra) * limb + faculae*0.35;
+      vec3 c = sc * I;
+      c = mix(c, vec3(1.0, 0.97, 0.92), clamp(I - 1.05, 0.0, 1.0)*0.55*z);
+      c *= mix(vec3(1.0), vec3(1.0, 0.62, 0.42), pow(1.0 - z, 2.2));
+      inside = c*1.45;
+    }
+    float edge = 1.0 - smoothstep(R - 1.5*px, R + 1.5*px, r);
+    vec3 starCol = mix(outside, inside, edge);
+    starCol += vec3(1.0, 0.55, 0.38) * exp(-abs(r - R)/(R*0.012)) * 0.35 * (0.5 + agit);
+    col += starCol * alive;
+
+    /* completion flare. Model: coronal loops follow the field lines of a magnetic dipole buried just
+       below the surface, r = L*sin^2(theta). Every line starts inside the star and crosses the surface,
+       so loops are always anchored. Sequence: footpoint flash -> post-flare arcade lights up loop by
+       loop -> outer flux rope erupts and tears open into a CME plume. */
+    if (uFlareT >= 0.0 && uFlareT < 1.0){
+      float ft = uFlareT;
+      vec2 fd = vec2(cos(uFlareA), sin(uFlareA)), pd = vec2(-fd.y, fd.x);
+      vec2 q = su/R;
+      float rq = length(q);
+      float rise = 1.0 - exp(-ft*3.2);
+      float fade = 1.0 - smoothstep(0.5, 1.0, ft);
+      float early = 1.0 - smoothstep(0.0, 0.45, ft);
+      vec2 c0 = fd*0.86;
+      vec2 v = q - c0;
+      float rv = length(v);
+      float ct = dot(v, pd)/max(rv, 1e-4);
+      float s2 = max(1.0 - ct*ct, 1e-3);
+      float turb = fbm3(vec3(q*5.0, t*0.6 + ft*4.0));
+      float turb2 = fbm3(vec3(q*12.0, t*0.9 - ft*5.0));
+      float Lp = rv/s2*(1.0 + turb*0.07);
+      float front = smoothstep(-0.02, 0.08, dot(v, fd));
+      float outer = smoothstep(0.985, 1.005, rq);
+      float vis = mix(0.45, 1.0, outer)*front;
+      float arc = 0.0;
+      for (int k = 0; k < 5; k++){
+        float fk = float(k);
+        float Lk = 0.17 + fk*0.065 + rise*0.04;
+        float w = 0.007 + 0.005*fk;
+        float on = smoothstep(fk*0.07, fk*0.07 + 0.14, ft);
+        arc += exp(-abs(Lp - Lk)/w)*on*(0.95 - fk*0.12);
+      }
+      float Le = 0.5 + rise*1.6;
+      float tear = smoothstep(0.35, 0.75, ft);
+      float rope = exp(-abs(Lp - Le)/(0.02 + 0.07*rise))*(0.55 + 0.6*(turb2*0.5 + 0.5))*(1.0 - 0.6*tear*smoothstep(0.2, 0.9, abs(ct)));
+      float plume = smoothstep(Le, Le*0.5, Lp)*smoothstep(0.42, 0.7, Lp)*(0.25 + 0.75*(turb2*0.5 + 0.5))*0.4*rise;
+      vec2 apex = c0 + fd*Le*0.92;
+      float core = exp(-length(q - apex)/(0.05 + 0.12*rise))*(0.55 + 0.45*turb2);
+      float foot = exp(-length(q - fd*0.985)/0.09)*early;
+      float F = (arc*1.7 + rope*1.4 + plume + core*1.1)*vis*fade + foot*2.6;
+      vec3 hot = vec3(1.0, 0.96, 0.88), plasma = mix(vec3(1.0, 0.45, 0.2), sc*1.2, 0.35);
+      col += mix(plasma, hot, clamp(arc*0.45 + foot, 0.0, 1.0))*F*1.7;
+      col += sc*exp(-length(q - fd)*1.6)*0.7*early;
+    }
+
+    /* completion shock ring */
+    if (uRingA > 0.0) col += mix(sc, vec3(1.0), 0.5) * exp(-abs(r - uRingR)/0.006) * uRingA;
+  }
+
+  /* explosion shell */
+  if (uExplode > 0.0 && uExplode < 1.0){
+    float e = uExplode;
+    float r = length(uv);
+    float a = atan(uv.y, uv.x);
+    float rs = 0.06 + e*0.85;
+    float fil = fbm3(vec3(cos(a)*4.0, sin(a)*4.0, e*3.0)) * 0.5 + 0.5;
+    float shell = exp(-abs(r - rs)/(0.008 + e*0.05)) * (0.4 + 1.4*fil) * (1.0 - e);
+    float inner = exp(-r/(0.05 + e*0.4)) * (1.0 - e) * 0.8;
+    vec3 ec = mix(vec3(1.0, 0.95, 0.85), mix(vec3(1.0, 0.45, 0.25), vec3(0.85, 0.35, 1.0), e), smoothstep(0.0, 0.5, e));
+    col += ec * (shell*1.6 + inner);
+  }
+
+  col += vec3(1.0, 0.97, 0.94) * uFlash * 2.0;
+  col = 1.0 - exp(-col*1.35);
+  gl_FragColor = vec4(pow(col, vec3(0.95)), 1.0);
+}`;
+
+function sh(type, src){ const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+let prog;
+try {
+  prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+} catch (e) { document.querySelector('.readout').innerHTML = '<b class="err">Error</b>' + String(e.message).slice(0,120); console.error(e); return; }
+gl.useProgram(prog);
+const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const U = {}; ['uRes','uTime','uLoad','uRadius','uExplode','uNebula','uSeed','uFlash','uRingR','uRingA','uOff','uFlareT','uFlareA','uShake'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+const STATES = [
+  {max:.2, name:'Radiante', c:'#9CC2FF'}, {max:.5, name:'Tranquila', c:'#FFD58A'}, {max:.75, name:'Inquieta', c:'#FFA45C'},
+  {max:1, name:'Al límite', c:'#FF6B5A'}, {max:9, name:'Supernova', c:'#D7A8FF'}
+];
+const NEED = 3;
+const S = { target:.35, sL:.35, mode:'star', t0:0, seed:0, rings:[], shrink:0 };
+const $ = s => document.querySelector(s);
+const range = $('#load'), mini = $('#mini'), mctx = mini.getContext('2d');
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- sound: everything synthesized with Web Audio ---------- */
+const AU = { C:null, on:false };
+function audioInit(){
+  if (AU.C) return;
+  const C = AU.C = new (window.AudioContext || window.webkitAudioContext)();
+  const comp = C.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; comp.connect(C.destination);
+  AU.master = C.createGain(); AU.master.gain.value = .9; AU.master.connect(comp);
+  const len = C.sampleRate*3.5, ir = C.createBuffer(2, len, C.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random()*2 - 1)*Math.pow(1 - i/len, 3); }
+  AU.verb = C.createConvolver(); AU.verb.buffer = ir; const vg = C.createGain(); vg.gain.value = .5; AU.verb.connect(vg).connect(AU.master);
+  const nb = C.createBuffer(1, C.sampleRate*2, C.sampleRate), nd = nb.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random()*2 - 1;
+  AU.noise = nb;
+  const hg = C.createGain(); hg.gain.value = 0;
+  const o1 = C.createOscillator(), o2 = C.createOscillator(), o3 = C.createOscillator();
+  o1.type = 'sine'; o2.type = 'sine'; o3.type = 'triangle'; o1.frequency.value = 55; o2.frequency.value = 55.6; o3.frequency.value = 110;
+  const o3g = C.createGain(); o3g.gain.value = .12;
+  const ns = noise(), lp = C.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 180; const ng = C.createGain(); ng.gain.value = .35;
+  const trem = C.createGain(); trem.gain.value = 1; const lfo = C.createOscillator(), lfog = C.createGain(); lfo.frequency.value = .25; lfog.gain.value = .25;
+  lfo.connect(lfog).connect(trem.gain);
+  o1.connect(trem); o2.connect(trem); o3.connect(o3g).connect(trem); ns.connect(lp).connect(ng).connect(trem);
+  trem.connect(hg); hg.connect(AU.master); const hv = C.createGain(); hv.gain.value = .3; hg.connect(hv).connect(AU.verb);
+  [o1, o2, o3, lfo, ns].forEach(n => n.start());
+  AU.hum = { hg, o1, o2, o3, lp, lfo };
+}
+function noise(){ const s = AU.C.createBufferSource(); s.buffer = AU.noise; s.loop = true; return s; }
+function env(g, t, a, peak, d){ g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + d); }
+function out(node, wet){ node.connect(AU.master); if (wet) { const w = AU.C.createGain(); w.gain.value = wet; node.connect(w).connect(AU.verb); } }
+function setHum(){
+  if (!AU.C) return;
+  const t = AU.C.currentTime, L = clamp(S.sL, 0, 1.1), h = AU.hum;
+  const live = AU.on && (S.mode === 'star' || S.mode === 'reborn');
+  h.hg.gain.setTargetAtTime(live ? .1 + .12*L : (AU.on && S.mode === 'nebula' ? .05 : 0), t, .6);
+  h.o1.frequency.setTargetAtTime(58 - L*18, t, .8); h.o2.frequency.setTargetAtTime(58.6 - L*17 + L*1.5, t, .8); h.o3.frequency.setTargetAtTime(116 - L*30, t, .8);
+  h.lp.frequency.setTargetAtTime(140 + L*700, t, .8); h.lfo.frequency.setTargetAtTime(.2 + L*3.2, t, .8);
+}
+function play(kind){
+  if (!AU.on || !AU.C) return;
+  const C = AU.C, t = C.currentTime + .01;
+  if (kind === 'flare') {
+    const o = C.createOscillator(), g = C.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(32, t + .7);
+    env(g, t, .006, .9, .9); o.connect(g); out(g, .3); o.start(t); o.stop(t + 1.1);
+    const n = noise(), bp = C.createBiquadFilter(), g2 = C.createGain(); bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(250, t); bp.frequency.exponentialRampToValueAtTime(2600, t + 1.1); bp.frequency.exponentialRampToValueAtTime(600, t + 2.4);
+    env(g2, t, .22, .55, 1.9); n.connect(bp).connect(g2); out(g2, .7); n.start(t); n.stop(t + 2.5);
+    const n2 = noise(), lp = C.createBiquadFilter(), g3 = C.createGain(); lp.type = 'lowpass'; lp.frequency.value = 130;
+    env(g3, t + .1, .15, .7, 2.2); n2.connect(lp).connect(g3); out(g3, .4); n2.start(t); n2.stop(t + 2.6);
+    const n3 = noise(), hp = C.createBiquadFilter(), g4 = C.createGain(); hp.type = 'highpass'; hp.frequency.value = 3200; g4.gain.value = .0001;
+    n3.connect(hp).connect(g4); out(g4, .5); n3.start(t); n3.stop(t + 2);
+    for (let i = 0; i < 34; i++) { const s = t + .15 + Math.random()*1.5*Math.random(), p = .05 + Math.random()*.25;
+      g4.gain.setValueAtTime(.0001, s); g4.gain.exponentialRampToValueAtTime(p, s + .002); g4.gain.exponentialRampToValueAtTime(.0001, s + .02 + Math.random()*.04); }
+  } else if (kind === 'boom') {
+    const z = C.createOscillator(), zg = C.createGain(); z.type = 'sawtooth';
+    z.frequency.setValueAtTime(1400, t); z.frequency.exponentialRampToValueAtTime(50, t + .35); env(zg, t, .01, .25, .4); z.connect(zg); out(zg, .5); z.start(t); z.stop(t + .5);
+    const o = C.createOscillator(), g = C.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(70, t + .2); o.frequency.exponentialRampToValueAtTime(18, t + 3.5);
+    env(g, t + .2, .02, 1, 3.6); o.connect(g); out(g, .3); o.start(t); o.stop(t + 4);
+    const n = noise(), lp = C.createBiquadFilter(), sh = C.createWaveShaper(), g2 = C.createGain(); lp.type = 'lowpass';
+    const curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i/512 - 1; curve[i] = Math.tanh(x*3); } sh.curve = curve;
+    lp.frequency.setValueAtTime(7000, t + .2); lp.frequency.exponentialRampToValueAtTime(70, t + 3.6);
+    env(g2, t + .2, .015, .9, 3.6); n.connect(sh).connect(lp).connect(g2); out(g2, .9); n.start(t); n.stop(t + 4.2);
+  } else if (kind === 'rebirth') {
+    [261.6, 392, 523.3, 659.3, 784, 1046.5].forEach((f, i) => {
+      const o = C.createOscillator(), o2 = C.createOscillator(), g = C.createGain(), s = t + .5 + i*.13;
+      o.type = 'sine'; o2.type = 'triangle'; o.frequency.value = f; o2.frequency.value = f*1.003;
+      env(g, s, .5, .09, 3); o.connect(g); o2.connect(g); out(g, .9); o.start(s); o2.start(s); o.stop(s + 3.6); o2.stop(s + 3.6);
+    });
+    const n = noise(), hp = C.createBiquadFilter(), g = C.createGain(); hp.type = 'highpass';
+    hp.frequency.setValueAtTime(800, t); hp.frequency.exponentialRampToValueAtTime(7000, t + 1.4);
+    env(g, t, 1, .12, 1.2); n.connect(hp).connect(g); out(g, .8); n.start(t); n.stop(t + 2.4);
+  } else if (kind === 'chime') {
+    [1046.5, 1568, 2093].forEach((f, i) => { const o = C.createOscillator(), g = C.createGain(), s = t + i*.06;
+      o.type = 'sine'; o.frequency.value = f; env(g, s, .004, .14/(i + 1), 1.6); o.connect(g); out(g, .8); o.start(s); o.stop(s + 1.8); });
+  }
+}
+
+function ui(){
+  const L = S.target, nebula = S.mode === 'nebula' || S.mode === 'exploding';
+  const st = nebula ? STATES[4] : (STATES.find(s => L <= s.max) || STATES[3]);
+  document.documentElement.style.setProperty('--star', st.c);
+  $('#readout').innerHTML = nebula ? `<b>Nebulosa</b>Nace una estrella · ${S.seed}/${NEED}` : `<b>${st.name}</b>Carga ${Math.round(L*100)}%`;
+  $('#pct').textContent = Math.round(L*100) + '%';
+  $('#seedRow').hidden = !nebula;
+  $('#seeds').innerHTML = Array.from({length:NEED}, (_, i) => `<i class="${i < S.seed ? 'on' : ''}"></i>`).join('');
+  range.disabled = nebula || S.mode === 'reborn';
+  $('#boom').disabled = S.mode !== 'star';
+  setHum();
+}
+range.addEventListener('input', () => {
+  S.target = range.value/100;
+  if (S.target > 1 && S.mode === 'star') explode();
+  ui();
+});
+$('#complete').addEventListener('click', () => {
+  if (S.mode === 'star') {
+    S.rings.push(performance.now()); S.shrink = performance.now();
+    S.flare = { t0: performance.now(), a: Math.random()*Math.PI*2 };
+    play('flare');
+    S.target = Math.max(0, S.target - .1); range.value = Math.round(S.target*100);
+  } else if (S.mode === 'nebula') {
+    S.seed++;
+    if (S.seed >= NEED) { S.mode = 'reborn'; S.t0 = performance.now(); S.target = .3; S.sL = .3; range.value = 30; play('rebirth'); }
+    else play('chime');
+  }
+  ui();
+});
+$('#boom').addEventListener('click', () => { if (S.mode === 'star') { S.target = 1.05; range.value = 105; explode(); ui(); } });
+$('#reset').addEventListener('click', () => { S.mode = 'star'; S.seed = 0; S.target = .35; S.sL = .35; range.value = 35; ui(); });
+function explode(){ S.mode = 'exploding'; S.t0 = performance.now(); S.seed = 0; play('boom'); }
+$('#snd').addEventListener('click', e => {
+  audioInit(); if (AU.C.state === 'suspended') AU.C.resume();
+  AU.on = !AU.on; e.currentTarget.textContent = AU.on ? 'Sonido activado' : 'Activar sonido';
+  e.currentTarget.setAttribute('aria-pressed', AU.on); e.currentTarget.classList.toggle('go', AU.on); setHum();
+});
+setInterval(setHum, 400);
+
+const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+function fit(){
+  const r = canvas.getBoundingClientRect(), w = Math.round(r.width*DPR), h = Math.round(r.height*DPR);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+function frame(ts){
+  fit();
+  const t = ts/1000 * (REDUCED ? .3 : 1);
+  S.sL += (S.target - S.sL)*.03;
+  const L = clamp(S.sL, 0, 1.15);
+  let R = .16*(.8 + .55*clamp(L, 0, 1.1));
+  R *= 1 + .012*Math.sin(t*(1.2 + L*3.5));
+  const sk = clamp(1 - (ts - S.shrink)/700, 0, 1); R *= 1 - .07*Math.sin(sk*Math.PI);
+  let off = [0, 0];
+  if (L > .78 && S.mode === 'star') { const amp = (L - .78)*.006; off = [(Math.random()-.5)*amp, (Math.random()-.5)*amp]; }
+  let explodeU = 0, nebula = 0, flash = 0, radius = R;
+  if (S.mode === 'exploding') {
+    const e = (ts - S.t0)/3200;
+    const pre = clamp(e/.08, 0, 1);
+    radius = R*(1 + pre*.6);
+    explodeU = clamp(e, 0, 1);
+    nebula = clamp((e - .2)/.8, 0, 1);
+    flash = Math.exp(-Math.abs(e - .09)*30)*.9;
+    if (e >= 1) { S.mode = 'nebula'; ui(); }
+  } else if (S.mode === 'nebula') { nebula = 1; radius = 0; }
+  else if (S.mode === 'reborn') {
+    const k = (ts - S.t0)/2600;
+    nebula = clamp(1 - k*1.4, 0, 1);
+    const g = clamp((k - .3)/.7, 0, 1), back = 1 + 2.4*Math.pow(g - 1, 3) + 1.4*Math.pow(g - 1, 2);
+    radius = R*Math.max(0, back);
+    flash = Math.exp(-Math.abs(k - .3)*18)*.8;
+    if (k >= 1) { S.mode = 'star'; S.seed = 0; ui(); }
+  }
+  S.rings = S.rings.filter(r0 => ts - r0 < 1200);
+  let ringR = 0, ringA = 0;
+  if (S.rings.length) { const k = (ts - S.rings[S.rings.length-1])/1200; ringR = R*(1 + k*1.8); ringA = (1 - k)*.9; }
+
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform1f(U.uTime, t);
+  gl.uniform1f(U.uLoad, L);
+  gl.uniform1f(U.uRadius, radius);
+  gl.uniform1f(U.uExplode, explodeU);
+  gl.uniform1f(U.uNebula, nebula);
+  gl.uniform1f(U.uSeed, S.mode === 'nebula' ? S.seed/NEED : S.mode === 'reborn' ? 1 : 0);
+  gl.uniform1f(U.uFlash, flash);
+  gl.uniform1f(U.uRingR, ringR);
+  gl.uniform1f(U.uRingA, ringA);
+  gl.uniform2f(U.uOff, off[0], off[1]);
+  let fT = -1, shake = [0, 0];
+  if (S.flare) {
+    fT = (ts - S.flare.t0)/2600;
+    if (fT >= 1) { S.flare = null; fT = -1; }
+    else if (!REDUCED) { const amp = Math.max(0, 1 - fT/.18)*.006; shake = [(Math.random()-.5)*amp, (Math.random()-.5)*amp]; flash = Math.max(flash, Math.exp(-fT*25)*.25); gl.uniform1f(U.uFlash, flash); }
+  }
+  gl.uniform1f(U.uFlareT, fT);
+  gl.uniform1f(U.uFlareA, S.flare ? S.flare.a : 0);
+  gl.uniform2f(U.uShake, shake[0], shake[1]);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  const cw = canvas.width, crop = cw*.62;
+  mctx.clearRect(0, 0, 144, 144);
+  mctx.save(); mctx.beginPath(); mctx.arc(72, 72, 72, 0, Math.PI*2); mctx.clip();
+  mctx.drawImage(canvas, (cw - crop)/2, (canvas.height - crop)/2, crop, crop, 0, 0, 144, 144);
+  mctx.restore();
+  requestAnimationFrame(frame);
+}
+ui();
+requestAnimationFrame(frame);
+})();
+</script>
