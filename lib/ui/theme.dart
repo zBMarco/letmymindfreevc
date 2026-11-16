@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../models.dart';
 import '../star/star_fx.dart';
+import 'pages_goals.dart' show ConstellationPainter;
 
 class C {
   static const bg = Color(0xFF04050D);
@@ -179,7 +181,10 @@ class Toggle extends StatelessWidget {
 class SkyBackground extends StatefulWidget {
   final Color tint;
   final bool nebula;
-  const SkyBackground({super.key, required this.tint, required this.nebula});
+
+  /// Constellations earned with the goal streak, drawn faintly in the sky.
+  final List<Reward> constellations;
+  const SkyBackground({super.key, required this.tint, required this.nebula, this.constellations = const []});
   @override
   State<SkyBackground> createState() => _SkyBackgroundState();
 }
@@ -212,7 +217,7 @@ class _SkyBackgroundState extends State<SkyBackground> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(
-        child: CustomPaint(painter: _SkyPainter(_t, widget.tint, widget.nebula), size: Size.infinite),
+        child: CustomPaint(painter: _SkyPainter(_t, widget.tint, widget.nebula, widget.constellations), size: Size.infinite),
       );
 }
 
@@ -220,7 +225,14 @@ class _SkyPainter extends CustomPainter {
   final ValueNotifier<double> t;
   final Color tint;
   final bool nebula;
-  _SkyPainter(this.t, this.tint, this.nebula) : super(repaint: t);
+  final List<Reward> constellations;
+  _SkyPainter(this.t, this.tint, this.nebula, this.constellations) : super(repaint: t);
+
+  // where each earned constellation sits in the sky (x, y, size as fraction of width)
+  static const _slots = [
+    (.70, .14, .26), (.06, .40, .24), (.66, .52, .22), (.10, .70, .26), (.62, .80, .25), (.30, .03, .22),
+    (.74, .30, .20), (.04, .14, .22), (.40, .60, .20), (.36, .86, .22), (.38, .26, .24),
+  ];
 
   @override
   void paint(Canvas canvas, Size s) {
@@ -246,6 +258,12 @@ class _SkyPainter extends CustomPainter {
               .createShader(Rect.fromCircle(center: center, radius: rad)),
       );
     }
+    for (var i = 0; i < constellations.length && i < _slots.length; i++) {
+      final (x, y, w) = _slots[i];
+      final side = w * s.width;
+      final a = .32 + .1 * sin(time * .4 + i);
+      ConstellationPainter.paintInto(canvas, Rect.fromLTWH(x * s.width, y * s.height, side, side), constellations[i], alpha: a);
+    }
     final p = Paint();
     for (final (x, y, r, ph, sp) in _stars) {
       p.color = Colors.white.withValues(alpha: .25 + .5 * (sin(time * sp * .5 + ph)).abs());
@@ -254,7 +272,7 @@ class _SkyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _SkyPainter old) => old.tint != tint || old.nebula != nebula;
+  bool shouldRepaint(covariant _SkyPainter old) => old.tint != tint || old.nebula != nebula || old.constellations.length != constellations.length;
 }
 
 /// Small helper so pages can rebuild every second (live timers).

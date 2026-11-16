@@ -22,10 +22,25 @@ class Supernova extends StarEvent {}
 
 class Rebirth extends StarEvent {}
 
+class GoalChecked extends StarEvent {
+  final Goal goal;
+  final int streak;
+
+  /// Set when this check-in reached a constellation for the first time.
+  final Reward? unlocked;
+  GoalChecked(this.goal, this.streak, this.unlocked);
+}
+
+class GoalAchieved extends StarEvent {
+  final Goal goal;
+  GoalAchieved(this.goal);
+}
+
 class AppStore extends ChangeNotifier {
   static const _key = 'miestrella.v1';
   final Map<String, Task> tasks = {};
   final Map<String, TaskType> cats = {};
+  final Map<String, Goal> goals = {};
   StarState star = StarState();
   bool sound = true;
   bool haptics = true;
@@ -71,6 +86,11 @@ class AppStore extends ChangeNotifier {
       final cat = TaskType.fromJson(Map<String, dynamic>.from(c));
       newCats[cat.id] = cat;
     }
+    final newGoals = <String, Goal>{};
+    for (final g in (j['goals'] as List? ?? [])) {
+      final goal = Goal.fromJson(Map<String, dynamic>.from(g));
+      newGoals[goal.id] = goal;
+    }
     final newStar = j['star'] != null ? StarState.fromJson(Map<String, dynamic>.from(j['star'])) : StarState();
     // Only replace once everything parsed, so a bad file never leaves half the data.
     tasks
@@ -79,6 +99,9 @@ class AppStore extends ChangeNotifier {
     cats
       ..clear()
       ..addAll(newCats);
+    goals
+      ..clear()
+      ..addAll(newGoals);
     star = newStar;
     sound = j['sound'] as bool? ?? true;
     haptics = j['haptics'] as bool? ?? true;
@@ -90,6 +113,7 @@ class AppStore extends ChangeNotifier {
         'version': 1,
         'tasks': tasks.values.map((t) => t.toJson()).toList(),
         'cats': cats.values.map((c) => c.toJson()).toList(),
+        'goals': goals.values.map((g) => g.toJson()).toList(),
         'star': star.toJson(),
         'sound': sound,
         'haptics': haptics,
@@ -366,6 +390,97 @@ class AppStore extends ChangeNotifier {
     if (t == null || t.notes == notes) return;
     t.notes = notes;
     _save();
+  }
+
+  /* ---------- goals & streak ---------- */
+  List<Goal> get activeGoals => goals.values.where((g) => g.active).toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  List<Goal> get achievedGoals => goals.values.where((g) => !g.active).toList()..sort((a, b) => b.achievedAt!.compareTo(a.achievedAt!));
+
+  /// Every day where you kept at least one goal.
+  Set<String> get goalDays => {for (final g in goals.values) ...g.days};
+  int get goalStreak => streakOf(goalDays);
+  int get bestGoalStreak => bestStreakOf(goalDays);
+  bool get goalDoneToday => goalDays.contains(dayKey(nowMs()));
+
+  /// Constellations earned (by your best streak ever, so they're never lost).
+  List<Reward> get unlockedRewards {
+    final best = bestGoalStreak;
+    return rewards.where((r) => r.days <= best).toList();
+  }
+
+  /// The constellation your current streak is drawing (null after a full year).
+  Reward? get nextReward {
+    final cur = goalStreak;
+    for (final r in rewards) {
+      if (r.days > cur) return r;
+    }
+    return null;
+  }
+
+  Goal addGoal({required String title, String why = '', required int color, int? target}) {
+    final g = Goal(id: newId('g'), title: title, why: why, color: color, target: target, createdAt: nowMs());
+    goals[g.id] = g;
+    _commit();
+    return g;
+  }
+
+  void updateGoal(String id, {required String title, required String why, required int color, int? target}) {
+    final g = goals[id];
+    if (g == null) return;
+    g
+      ..title = title
+      ..why = why
+      ..color = color
+      ..target = target;
+    _commit();
+  }
+
+  /// Marks (or unmarks) today for a goal. Returns true when it ended up marked.
+  bool toggleGoalToday(String id) {
+    final g = goals[id];
+    if (g == null || !g.active) return false;
+    final today = dayKey(nowMs());
+    if (g.days.remove(today)) {
+      _commit();
+      return false;
+    }
+    final firstToday = !goalDoneToday;
+    final bestBefore = bestGoalStreak;
+    g.days.add(today);
+    _commit();
+    final streak = goalStreak;
+    Reward? unlocked;
+    for (final r in rewards) {
+      if (r.days > bestBefore && r.days <= streak) unlocked = r;
+    }
+    _events.add(GoalChecked(g, firstToday ? streak : -1, unlocked));
+    return true;
+  }
+
+  void achieveGoal(String id) {
+    final g = goals[id];
+    if (g == null || !g.active) return;
+    g.achievedAt = nowMs();
+    _commit();
+    _events.add(GoalAchieved(g));
+  }
+
+  void reopenGoal(String id) {
+    final g = goals[id];
+    if (g == null) return;
+    g.achievedAt = null;
+    _commit();
+  }
+
+  Goal? deleteGoal(String id) {
+    final g = goals.remove(id);
+    _commit();
+    return g;
+  }
+
+  void restoreGoal(Goal g) {
+    goals[g.id] = g;
+    _commit();
   }
 
   /* ---------- categories & settings ---------- */

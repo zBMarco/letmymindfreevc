@@ -10,6 +10,7 @@ import '../services/sound.dart';
 import '../star/star_fx.dart';
 import '../store.dart';
 import 'celebration.dart';
+import 'pages_goals.dart';
 import 'pages_star_stats.dart';
 import 'pages_tasks.dart';
 import 'pages_types.dart';
@@ -38,6 +39,10 @@ class _ShellState extends State<Shell> {
       tab = int.tryParse(q['tab'] ?? '') ?? 0;
       if (q['demo'] == '1' && store.tasks.isEmpty) _seedDemo();
       if (q['ft'] != null) fx.debugFlareT = double.tryParse(q['ft']!);
+      final rw = int.tryParse(q['reward'] ?? '');
+      if (rw != null && rw >= 0 && rw < rewards.length) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => showRewardUnlock(context, rewards[rw]));
+      }
     }
     _sub = store.events.listen(_onEvent);
     store.addListener(_syncFx);
@@ -69,6 +74,12 @@ class _ShellState extends State<Shell> {
     }
     final med = store.addTask(title: 'Ejemplo: chequeo médico', catId: c2[3].id, size: 1);
     store.addSub(med.id, 'Agendar cita');
+    final g1 = store.addGoal(title: 'Ejemplo: hacer ejercicio', why: 'Tener más energía y dormir mejor', color: 0xFF8EF0B8);
+    final g2 = store.addGoal(title: 'Ejemplo: aprender inglés', why: 'Conseguir un mejor trabajo', color: 0xFF7CC8FF, target: nowMs() + 40 * 86400000);
+    final d = DateTime.now();
+    for (var i = 1; i <= 8; i++) {
+      (i.isEven ? g1 : g2).days.add(dayKey(DateTime(d.year, d.month, d.day - i, 12).millisecondsSinceEpoch));
+    }
     // finished tasks become rocks in the asteroid belt
     for (var i = 0; i < 40; i++) {
       final t = store.addTask(title: 'Ejemplo: hecha $i', catId: c2[i % c2.length].id, size: 1 + i % 4);
@@ -125,6 +136,44 @@ class _ShellState extends State<Shell> {
         _haptic([(0, 'heavy'), (60, 'heavy'), (60, 'heavy'), (120, 'heavy'), (200, 'medium'), (300, 'light'), (400, 'light')]);
         Future.delayed(const Duration(milliseconds: 700), () => stamp.value = ('¡Supernova!', false));
         Future.delayed(const Duration(milliseconds: 3400), () => stamp.value = null);
+      case GoalChecked(:final goal, :final streak, :final unlocked):
+        if (unlocked != null) {
+          fx.flare();
+          SoundEngine.instance.play('rebirth');
+          _haptic([(0, 'light'), (200, 'medium'), (200, 'heavy'), (300, 'heavy'), (400, 'medium')]);
+          showRewardUnlock(context, unlocked);
+        } else if (streak > 0) {
+          // first goal kept today: the streak grows
+          fx.flare();
+          SoundEngine.instance.play('chime');
+          _haptic([(0, 'heavy'), (110, 'medium'), (120, 'light')]);
+          final next = store.nextReward;
+          final left = next == null ? 0 : next.days - streak;
+          showCelebration(
+            context,
+            title: streak == 1 ? '¡Racha encendida!' : '¡$streak días!',
+            color: fire,
+            big: 'Racha de constancia: $streak',
+            line: goalCheers[Random().nextInt(goalCheers.length)],
+            small: next == null ? goal.title : '${goal.title} · faltan $left ${left == 1 ? 'día' : 'días'} para ${next.name}',
+          );
+        } else {
+          // another goal on a day that already counted
+          SoundEngine.instance.play('add', volume: .8);
+          _haptic([(0, 'medium'), (90, 'light')]);
+        }
+      case GoalAchieved(:final goal):
+        fx.flare();
+        SoundEngine.instance.play('flare');
+        _haptic([(0, 'heavy'), (90, 'heavy'), (160, 'heavy'), (220, 'medium'), (300, 'light')]);
+        showCelebration(
+          context,
+          title: '¡Meta lograda!',
+          color: const Color(0xFFFFD58A),
+          big: goal.title,
+          line: 'Lo dijiste y lo hiciste.',
+          small: '${goal.days.length} ${goal.days.length == 1 ? 'día' : 'días'} de esfuerzo · desde ${fmtDate(goal.createdAt)}',
+        );
       case Rebirth():
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (!mounted) return;
@@ -142,6 +191,10 @@ class _ShellState extends State<Shell> {
     showTaskSheet(context, store, edit: edit);
   }
 
+  void _openGoal([Goal? edit]) {
+    showGoalSheet(context, store, edit: edit);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
@@ -153,13 +206,14 @@ class _ShellState extends State<Shell> {
         final pages = [
           TasksPage(store: store, onEdit: _openSheet, onAdd: () => _openSheet()),
           StarPage(store: store, stamp: stamp),
+          GoalsPage(store: store, onAdd: () => _openGoal(), onEdit: _openGoal),
           StatsPage(store: store, onGoTasks: () => setState(() => tab = 0)),
           TypesPage(store: store),
         ];
         return Scaffold(
           backgroundColor: C.bg,
           body: Stack(children: [
-            Positioned.fill(child: SkyBackground(tint: Color(lvl.color), nebula: nebula)),
+            Positioned.fill(child: SkyBackground(tint: Color(lvl.color), nebula: nebula, constellations: store.unlockedRewards)),
             SafeArea(
               bottom: false,
               child: Column(children: [
@@ -180,17 +234,17 @@ class _ShellState extends State<Shell> {
                 ),
               ]),
             ),
-            if (tab == 0 || tab == 1)
+            if (tab <= 2)
               Positioned(
                 right: 20,
                 bottom: bottomInset + 92,
-                child: _Fab(color: Color(lvl.color), onTap: () => _openSheet()),
+                child: _Fab(color: tab == 2 ? fire : Color(lvl.color), label: tab == 2 ? 'Nueva meta' : 'Nueva tarea', onTap: () => tab == 2 ? _openGoal() : _openSheet()),
               ),
             Positioned(
               left: 14,
               right: 14,
               bottom: bottomInset + 10,
-              child: _NavBar(tab: tab, color: Color(lvl.color), onTap: (i) {
+              child: _NavBar(tab: tab, color: Color(lvl.color), goalsPending: store.activeGoals.isNotEmpty && !store.goalDoneToday, onTap: (i) {
                 if (store.haptics) HapticFeedback.selectionClick();
                 setState(() => tab = i);
               }),
@@ -267,8 +321,9 @@ class _Header extends StatelessWidget {
 
 class _Fab extends StatefulWidget {
   final Color color;
+  final String label;
   final VoidCallback onTap;
-  const _Fab({required this.color, required this.onTap});
+  const _Fab({required this.color, required this.label, required this.onTap});
   @override
   State<_Fab> createState() => _FabState();
 }
@@ -293,7 +348,7 @@ class _FabState extends State<_Fab> {
               gradient: RadialGradient(center: const Alignment(-.3, -.4), colors: [Colors.white, widget.color, Color.lerp(widget.color, Colors.black, .3)!], stops: const [0, .55, 1]),
               boxShadow: [BoxShadow(color: widget.color.withValues(alpha: .6), blurRadius: 30), const BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, 10))],
             ),
-            child: const Icon(Icons.add_rounded, size: 32, color: C.ink, semanticLabel: 'Nueva tarea'),
+            child: Icon(Icons.add_rounded, size: 32, color: C.ink, semanticLabel: widget.label),
           ),
         ),
       );
@@ -302,12 +357,14 @@ class _FabState extends State<_Fab> {
 class _NavBar extends StatelessWidget {
   final int tab;
   final Color color;
+  final bool goalsPending;
   final ValueChanged<int> onTap;
-  const _NavBar({required this.tab, required this.color, required this.onTap});
+  const _NavBar({required this.tab, required this.color, required this.goalsPending, required this.onTap});
 
   static const _items = [
     (Icons.format_list_bulleted_rounded, 'Tareas'),
     (Icons.wb_sunny_outlined, 'Estrella'),
+    (Icons.local_fire_department_rounded, 'Metas'),
     (Icons.insights_rounded, 'Progreso'),
     (Icons.public_rounded, 'Tipos'),
   ];
@@ -331,7 +388,19 @@ class _NavBar extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(color: tab == i ? Colors.white.withValues(alpha: .1) : Colors.transparent, borderRadius: BorderRadius.circular(20)),
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(_items[i].$1, size: 22, color: tab == i ? color : C.faint, shadows: tab == i ? [Shadow(color: color, blurRadius: 10)] : null),
+                        Stack(clipBehavior: Clip.none, children: [
+                          Icon(_items[i].$1, size: 22, color: tab == i ? color : C.faint, shadows: tab == i ? [Shadow(color: color, blurRadius: 10)] : null),
+                          if (i == 2 && goalsPending)
+                            Positioned(
+                              right: -3,
+                              top: -1,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(shape: BoxShape.circle, color: fire, boxShadow: [BoxShadow(color: fire, blurRadius: 6)]),
+                              ),
+                            ),
+                        ]),
                         const SizedBox(height: 3),
                         Text(_items[i].$2, style: sora(11, w: FontWeight.w500, color: tab == i ? color : C.faint)),
                       ]),

@@ -249,3 +249,122 @@ String fmtDay(int t) {
   final d = DateTime.fromMillisecondsSinceEpoch(t);
   return '${_weekdays[d.weekday - 1]} ${d.day} ${_months[d.month - 1]}';
 }
+
+/* ============================== metas y racha ============================== */
+
+class Goal {
+  final String id;
+  String title;
+  String why;
+  int color;
+  int? target;
+  int createdAt;
+  int? achievedAt;
+
+  /// dayKey() of every day you checked this goal.
+  Set<String> days;
+
+  Goal({required this.id, required this.title, this.why = '', required this.color, this.target, required this.createdAt, this.achievedAt, Set<String>? days})
+      : days = days ?? {};
+
+  bool get active => achievedAt == null;
+  bool get doneToday => days.contains(dayKey(nowMs()));
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'why': why,
+        'color': color,
+        'target': target,
+        'createdAt': createdAt,
+        'achievedAt': achievedAt,
+        'days': days.toList(),
+      };
+
+  factory Goal.fromJson(Map<String, dynamic> j) => Goal(
+        id: j['id'] as String,
+        title: j['title'] as String,
+        why: j['why'] as String? ?? '',
+        color: j['color'] as int? ?? catPalette[0],
+        target: j['target'] as int?,
+        createdAt: j['createdAt'] as int,
+        achievedAt: j['achievedAt'] as int?,
+        days: {...(j['days'] as List? ?? []).cast<String>()},
+      );
+}
+
+/// Consecutive days in [days] ending today, or yesterday if today isn't marked yet
+/// (the streak is still alive until the day ends).
+int streakOf(Set<String> days, [DateTime? now]) {
+  var d = now ?? DateTime.now();
+  if (!days.contains(dayKey(d.millisecondsSinceEpoch))) d = DateTime(d.year, d.month, d.day - 1, 12);
+  var n = 0;
+  while (days.contains(dayKey(d.millisecondsSinceEpoch))) {
+    n++;
+    d = DateTime(d.year, d.month, d.day - 1, 12);
+  }
+  return n;
+}
+
+/// Longest run of consecutive days ever.
+int bestStreakOf(Set<String> days) {
+  if (days.isEmpty) return 0;
+  final dates = days.map((k) {
+    final p = k.split('-').map(int.parse).toList();
+    return DateTime(p[0], p[1], p[2], 12);
+  }).toList()
+    ..sort();
+  var best = 1, run = 1;
+  for (var i = 1; i < dates.length; i++) {
+    final prev = dates[i - 1];
+    final next = DateTime(prev.year, prev.month, prev.day + 1, 12);
+    run = (dates[i].year == next.year && dates[i].month == next.month && dates[i].day == next.day) ? run + 1 : 1;
+    best = max(best, run);
+  }
+  return best;
+}
+
+/// A constellation you earn by keeping your streak. Points live in a 0..1 square.
+class Reward {
+  final int days;
+  final String name;
+  final String line;
+  final int color;
+  final List<(double, double)> pts;
+  final List<(int, int)> edges;
+  const Reward(this.days, this.name, this.line, this.color, this.pts, this.edges);
+}
+
+const rewards = [
+  Reward(3, 'Triángulo', 'Tres días seguidos. Ya empezaste a dibujar tu cielo.', 0xFF9CC2FF,
+      [(.2, .75), (.8, .62), (.45, .2)], [(0, 1), (1, 2), (2, 0)]),
+  Reward(7, 'Casiopea', 'Una semana completa. Eso ya es constancia.', 0xFFFFD58A,
+      [(.08, .35), (.3, .7), (.5, .42), (.7, .75), (.92, .3)], [(0, 1), (1, 2), (2, 3), (3, 4)]),
+  Reward(14, 'Lira', 'Dos semanas. Tu disciplina ya suena.', 0xFF8EF0B8,
+      [(.5, .1), (.4, .38), (.62, .42), (.33, .85), (.58, .9)], [(0, 1), (0, 2), (1, 2), (1, 3), (2, 4), (3, 4)]),
+  Reward(21, 'Cisne', 'Tres semanas: dicen que así nace un hábito.', 0xFFC3A6FF,
+      [(.5, .08), (.5, .4), (.5, .7), (.5, .95), (.12, .3), (.88, .48)], [(0, 1), (1, 2), (2, 3), (4, 1), (1, 5)]),
+  Reward(30, 'Osa Menor', 'Un mes entero. Ya tienes tu propia estrella polar.', 0xFF7CC8FF,
+      [(.1, .2), (.28, .3), (.42, .42), (.55, .55), (.6, .82), (.88, .85), (.85, .58)], [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 3)]),
+  Reward(50, 'Osa Mayor', 'Cincuenta días. Esto ya es parte de ti.', 0xFFFF8FC8,
+      [(.05, .3), (.22, .35), (.38, .42), (.52, .52), (.55, .82), (.9, .85), (.92, .55)], [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 3)]),
+  Reward(75, 'León', 'Setenta y cinco días con el corazón de un león.', 0xFFFFB86B,
+      [(.18, .3), (.25, .12), (.4, .1), (.35, .45), (.3, .7), (.62, .6), (.92, .78), (.75, .42)], [(0, 1), (1, 2), (0, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 3)]),
+  Reward(100, 'Orión', 'Cien días. Eres el cazador de tus metas.', 0xFFFF7A6B,
+      [(.28, .1), (.72, .15), (.42, .5), (.5, .48), (.58, .46), (.25, .9), (.75, .88), (.5, .05)], [(0, 2), (1, 4), (2, 3), (3, 4), (2, 5), (4, 6), (0, 7), (7, 1)]),
+  Reward(150, 'Escorpión', 'Ciento cincuenta días. Nada te detiene.', 0xFFFF6BD5,
+      [(.88, .1), (.8, .25), (.68, .35), (.55, .45), (.45, .6), (.4, .78), (.25, .9), (.1, .82), (.12, .65)], [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8)]),
+  Reward(200, 'Andrómeda', 'Doscientos días. Tu cielo ya tiene galaxias.', 0xFFB79CFF,
+      [(.05, .7), (.3, .6), (.55, .48), (.82, .35), (.45, .25), (.62, .75), (.7, .1)], [(0, 1), (1, 2), (2, 3), (2, 4), (4, 6), (1, 5)]),
+  Reward(365, 'Fénix', 'Un año entero. Renaciste con tus metas.', 0xFFFFE08A,
+      [(.5, .08), (.5, .35), (.15, .2), (.85, .2), (.05, .5), (.95, .5), (.5, .62), (.35, .92), (.65, .92)], [(0, 1), (1, 2), (1, 3), (2, 4), (3, 5), (1, 6), (6, 7), (6, 8)]),
+];
+
+const goalCheers = [
+  'Un día más. Así se construye.',
+  'Constancia > motivación.',
+  'Tu yo del futuro te lo agradece.',
+  'Pequeño paso, gran racha.',
+  'No rompas la cadena.',
+  'Hoy cumpliste. Eso cuenta.',
+];

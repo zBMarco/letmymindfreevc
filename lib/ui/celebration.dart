@@ -7,10 +7,10 @@ import 'theme.dart';
 
 OverlayEntry? _current;
 
-void showCelebration(BuildContext context, {required String big, required String line, required String small}) {
+void showCelebration(BuildContext context, {required String big, required String line, required String small, String title = '¡Hecho!', Color color = C.ok}) {
   _current?.remove();
   late OverlayEntry entry;
-  entry = OverlayEntry(builder: (_) => _Celebration(big: big, line: line, small: small, onDone: () {
+  entry = OverlayEntry(builder: (_) => _Celebration(big: big, line: line, small: small, title: title, color: color, onDone: () {
         if (_current == entry) {
           entry.remove();
           _current = null;
@@ -21,9 +21,10 @@ void showCelebration(BuildContext context, {required String big, required String
 }
 
 class _Celebration extends StatefulWidget {
-  final String big, line, small;
+  final String big, line, small, title;
+  final Color color;
   final VoidCallback onDone;
-  const _Celebration({required this.big, required this.line, required this.small, required this.onDone});
+  const _Celebration({required this.big, required this.line, required this.small, required this.title, required this.color, required this.onDone});
   @override
   State<_Celebration> createState() => _CelebrationState();
 }
@@ -72,21 +73,21 @@ class _CelebrationState extends State<_Celebration> with SingleTickerProviderSta
                     decoration: BoxDecoration(
                       color: const Color(0xB3141630),
                       borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: C.ok.withValues(alpha: .4)),
-                      boxShadow: [BoxShadow(color: C.ok.withValues(alpha: .25), blurRadius: 60)],
+                      border: Border.all(color: widget.color.withValues(alpha: .4)),
+                      boxShadow: [BoxShadow(color: widget.color.withValues(alpha: .25), blurRadius: 60)],
                     ),
                     child: Material(
                       type: MaterialType.transparency,
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         ShaderMask(
-                          shaderCallback: (r) => const LinearGradient(colors: [Colors.white, C.ok]).createShader(r),
-                          child: Text('¡Hecho!', style: sora(44, w: FontWeight.w600, color: Colors.white, ls: -1.2)),
+                          shaderCallback: (r) => LinearGradient(colors: [Colors.white, widget.color]).createShader(r),
+                          child: Text(widget.title, textAlign: TextAlign.center, style: sora(44, w: FontWeight.w600, color: Colors.white, ls: -1.2)),
                         ),
                         const SizedBox(height: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(color: C.ok.withValues(alpha: .12), borderRadius: BorderRadius.circular(99), border: Border.all(color: C.ok.withValues(alpha: .4))),
-                          child: Text(widget.big, style: mono(18, w: FontWeight.w500, color: C.ok)),
+                          decoration: BoxDecoration(color: widget.color.withValues(alpha: .12), borderRadius: BorderRadius.circular(99), border: Border.all(color: widget.color.withValues(alpha: .4))),
+                          child: Text(widget.big, textAlign: TextAlign.center, style: mono(18, w: FontWeight.w500, color: widget.color)),
                         ),
                         const SizedBox(height: 12),
                         Text(widget.line, textAlign: TextAlign.center, style: sora(17, w: FontWeight.w500)),
