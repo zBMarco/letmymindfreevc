@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../models.dart';
 import '../services/platform/save_file.dart';
 import '../services/reminders.dart';
-import '../services/sound.dart';
 import '../store.dart';
 import 'pages_tasks.dart';
 import 'theme.dart';
@@ -41,7 +40,6 @@ class _TypesPageState extends State<TypesPage> {
       return;
     }
     if (store.haptics) HapticFeedback.lightImpact();
-    SoundEngine.instance.play('tick', volume: .7);
     final used = store.cats.values.map((x) => x.color).toSet();
     setState(() {
       msg = null;
@@ -201,7 +199,6 @@ class _TypesPageState extends State<TypesPage> {
             const SizedBox(height: 8),
             Text('Cuánta carga aguanta antes de explotar. Una tarea Grande pesa 3, una Monstruo pesa 5.', style: sora(13, color: C.faint, height: 1.4)),
             const SizedBox(height: 14),
-            Row(children: [Expanded(child: Text('Sonido', style: sora(16))), Toggle(value: store.sound, onChanged: store.setSound)]),
             if (!kIsWeb) ...[
               Row(children: [Expanded(child: Text('Vibración', style: sora(16))), Toggle(value: store.haptics, onChanged: store.setHaptics)]),
               const SizedBox(height: 8),

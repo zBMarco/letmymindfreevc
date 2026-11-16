@@ -19,6 +19,9 @@ uniform vec2 uOff;       // 13,14
 uniform vec2 uShake;     // 15,16
 uniform float uDetail;   // 17  (1 = full detail, 0 = mini)
 uniform float uZoom;     // 18  (>1 makes the star bigger in its box)
+uniform vec2 uView;      // 19,20  camera orbit: yaw, pitch (radians)
+uniform vec2 uPan;       // 21,22  camera pan (star-space units)
+uniform float uSpace;    // 23  (1 = draw the deep-space background: Milky Way + stars)
 
 out vec4 fragColor;
 
@@ -92,6 +95,53 @@ float starTemp(float L){
 }
 
 // Filmic tone curve (ACES, Narkowicz fit): highlights roll off to white instead of clipping.
+// Orbit camera: turns a direction from view space into star/sky space.
+vec3 orbit(vec3 v){
+  float cy = cos(uView.x), sy = sin(uView.x), cp = cos(uView.y), sp = sin(uView.y);
+  v.yz = mat2(cp, sp, -sp, cp)*v.yz;
+  v.xz = mat2(cy, sy, -sy, cy)*v.xz;
+  return v;
+}
+
+// Deep sky seen along direction rd: Milky Way band with dust lanes, faint nebulae and
+// stars whose colors follow Planck's law (most are cool and orange, a few hot and blue).
+vec3 cosmos(vec3 rd, float pix){
+  vec3 c = vec3(0.004, 0.005, 0.012);
+  vec3 nb = normalize(vec3(0.35, 1.0, 0.25));
+  float lat = dot(rd, nb);
+  float band = exp(-lat*lat*14.0);
+  float core = exp(-lat*lat*60.0);
+  float n = fbm(rd*3.2);
+  float dust = smoothstep(-0.05, 0.45, fbm3(rd*7.0 + 4.0))*core;
+  float glow = band*(0.55 + 0.45*n);
+  vec3 mw = mix(vec3(0.33, 0.36, 0.55), vec3(0.95, 0.80, 0.62), core);
+  c += mw*glow*0.11*(1.0 - 0.85*dust);
+  // star clouds along the band
+  c += vec3(0.9, 0.85, 0.8)*pow(max(fbm3(rd*22.0), 0.0), 2.0)*band*0.18*(1.0 - dust);
+  // faint emission nebulae
+  float neb = smoothstep(0.35, 0.8, fbm3(rd*4.5 + 11.0))*band;
+  c += vec3(0.75, 0.18, 0.35)*neb*0.05;
+  // point stars, two layers; more of them inside the Milky Way
+  for (int k = 0; k < 2; k++){
+    float sc = k == 0 ? 90.0 : 230.0;
+    vec3 p = rd*sc;
+    vec3 cell = floor(p);
+    vec3 h = hash33(cell + float(k)*37.0);
+    vec3 sp = cell + 0.15 + 0.7*h;
+    float d = length(p - sp)/sc;
+    float rarity = k == 0 ? 0.985 : 0.955 - 0.06*band;
+    float on = step(rarity, h.z);
+    float mag = pow(fract(h.x*13.7 + h.y*7.3), 4.0);
+    float w = pix*(0.6 + 1.1*mag);
+    float T = mix(3200.0, 12000.0, pow(fract(h.y*29.1), 2.2));
+    vec3 tint = blackbody(T);
+    tint /= max(tint.r, max(tint.g, tint.b));
+    float tw = 0.85 + 0.15*sin(uTime*(1.5 + 3.0*h.x) + h.y*40.0);
+    c += tint*exp(-d*d/(w*w))*on*(0.25 + 1.8*mag)*tw*(k == 0 ? 1.0 : 0.45);
+  }
+  return c;
+}
+
 vec3 aces(vec3 x){
   return clamp((x*(2.51*x + 0.03))/(x*(2.43*x + 0.59) + 0.14), 0.0, 1.0);
 }
@@ -101,6 +151,16 @@ void main(){
   float px = 1.0/min(uSize.x, uSize.y);
   vec2 uv = (frag - 0.5*uSize)*px/uZoom + uShake;
   uv.y = -uv.y;
+  uv += uPan;
+  float pxu = px/uZoom;  // one screen pixel in star-space units
+  vec3 bg = vec3(0.0);
+  if (uSpace > 0.5){
+    // the sky is far away: it turns with the camera but barely zooms
+    vec2 sv = (frag - 0.5*uSize)*px;
+    sv.y = -sv.y;
+    float fov = 1.1/(1.0 + 0.08*(uZoom - 1.0));
+    bg = cosmos(orbit(normalize(vec3(sv*fov, -1.0))), px*fov*1.1);
+  }
   float t = uTime, L = uLoad, R = max(uRadius, 0.0001);
   float agit = clamp((L - 0.42)/0.65, 0.0, 1.0);
   vec3 col = vec3(0.0);
@@ -152,10 +212,10 @@ void main(){
 
     // photosphere
     vec3 inside = vec3(0.0);
-    if (r < R + 2.0*px){
+    if (r < R + 2.0*pxu){
       float rr = min(r/R, 1.0);
       float z = sqrt(max(1.0 - rr*rr, 0.0));
-      vec3 n = vec3(su/R, z);
+      vec3 n = orbit(vec3(su/R, z));
       // differential rotation: equator spins faster than the poles
       float ang = t*0.035*(1.0 + 0.35*(1.0 - n.y*n.y));
       n.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang))*n.xz;
@@ -169,6 +229,13 @@ void main(){
       float cell = 1.0 - w.x*0.3;
       float fine = uDetail > 0.5 ? smoothstep(0.0, 0.35, abs(snoise(n*90.0 - vec3(0.0, t*speed*1.3, 0.0)))) : 1.0;
       float gran = lanes*cell*(0.75 + 0.25*fine);
+      if (uDetail > 1.5){
+        // close-up: smaller cells inside the big ones and bright points in the dark lanes
+        vec2 w2 = worley(n*130.0 + vec3(t*speed*1.4, 0.0, big*0.5));
+        float sub = smoothstep(0.0, 0.2, w2.y - w2.x);
+        float bp = smoothstep(0.02, 0.0, w2.x)*(1.0 - lanes);
+        gran = gran*(0.8 + 0.2*sub) + bp*0.25;
+      }
       // a few sunspot groups (only when stressed): penumbra + darker umbra
       float spotN = snoise(n*1.7 + vec3(0.0, t*0.012, 3.0)) + 0.25*snoise(n*6.0 + 11.0);
       float act = smoothstep(0.45, 0.95, L);
@@ -179,7 +246,9 @@ void main(){
       // limb darkening (quadratic law, solar coefficients)
       float mu = z;
       float limb = 1.0 - 0.6*(1.0 - mu) - 0.2*(1.0 - mu)*(1.0 - mu);
-      float I = (1.25 + 0.16*big)*mix(0.84, 1.03, gran)*(1.0 - 0.42*spots - 0.42*umbra)*limb + faculae*0.22;
+      // up close the granulation contrast and the umbra darkness approach what solar telescopes see
+      float close = clamp(uDetail - 1.0, 0.0, 1.0);
+      float I = (1.25 + 0.16*big)*mix(mix(0.84, 0.5, close), mix(1.03, 1.12, close), gran)*(1.0 - 0.42*spots - (0.42 + 0.35*close)*umbra)*limb + faculae*0.22;
       // Every point has its own temperature: hot rising granule centers, cooler sinking lanes,
       // cold spots, hot faculae. Near the limb we see higher, cooler layers (gray atmosphere,
       // T ~ ((2 + 3*mu)/5)^(1/4)), so the edge reddens on its own.
@@ -192,7 +261,7 @@ void main(){
       c = mix(c, vec3(1.0, 0.98, 0.94), clamp(I - 0.95, 0.0, 1.0)*0.75*z);
       inside = c*1.85;
     }
-    float edge = 1.0 - smoothstep(R - 1.5*px, R + 1.5*px, r);
+    float edge = 1.0 - smoothstep(R - 1.5*pxu, R + 1.5*pxu, r);
     vec3 starCol = mix(outside, inside, edge);
     starCol += vec3(1.0, 0.55, 0.38)*exp(-abs(r - R)/(R*0.012))*0.35*(0.5 + agit);
     // bloom: bright light spilling around the disk like in a camera lens
@@ -273,12 +342,13 @@ void main(){
     col += ec*(shell*1.6 + inner);
   }
 
+  col += bg*(1.0 - solid);
   col += vec3(1.0, 0.97, 0.94)*uFlash*2.0;
   col = aces(col*0.8);
   // dithering: breaks the color banding in the faint corona gradients
   col += (hash(frag + fract(t)) - 0.5)/255.0;
   col = max(col, vec3(0.0));
   // transparent where dark so the glass and sky show through (premultiplied output)
-  float alpha = max(solid, clamp(max(col.r, max(col.g, col.b))*0.55, 0.0, 1.0));
+  float alpha = uSpace > 0.5 ? 1.0 : max(solid, clamp(max(col.r, max(col.g, col.b))*0.55, 0.0, 1.0));
   fragColor = vec4(col, alpha);
 }

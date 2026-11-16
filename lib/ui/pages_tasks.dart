@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 
 import '../models.dart';
 import '../services/reminders.dart';
-import '../services/sound.dart';
 import '../store.dart';
 import 'theme.dart';
 
@@ -564,7 +563,6 @@ class _DetailState extends State<_Detail> {
               GestureDetector(
                 onTap: () {
                   if (store.haptics) HapticFeedback.lightImpact();
-                  if (!s.done) SoundEngine.instance.play('tick', volume: .7);
                   store.toggleSub(t.id, s.id);
                 },
                 child: AnimatedContainer(

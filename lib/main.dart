@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'services/reminders.dart';
-import 'services/sound.dart';
 import 'star/star_fx.dart';
 import 'store.dart';
 import 'ui/shell.dart';
@@ -26,8 +25,6 @@ Future<void> main() async {
     StarFx.loadShader(),
     Reminders.instance.init(),
   ]);
-  SoundEngine.instance.enabled = store.sound;
-  SoundEngine.instance.init(); // synthesizes sounds in the background
   runApp(MiEstrellaApp(store: store));
 }
 

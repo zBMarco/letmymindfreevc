@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 import 'services/reminders.dart';
 
-/// Things that happened that the UI turns into light, sound and haptics.
+/// Things that happened that the UI turns into light and haptics.
 sealed class StarEvent {}
 
 class TaskCompleted extends StarEvent {
@@ -42,7 +42,6 @@ class AppStore extends ChangeNotifier {
   final Map<String, TaskType> cats = {};
   final Map<String, Goal> goals = {};
   StarState star = StarState();
-  bool sound = true;
   bool haptics = true;
   String? lastCat;
 
@@ -103,7 +102,6 @@ class AppStore extends ChangeNotifier {
       ..clear()
       ..addAll(newGoals);
     star = newStar;
-    sound = j['sound'] as bool? ?? true;
     haptics = j['haptics'] as bool? ?? true;
     lastCat = j['lastCat'] as String?;
   }
@@ -115,7 +113,6 @@ class AppStore extends ChangeNotifier {
         'cats': cats.values.map((c) => c.toJson()).toList(),
         'goals': goals.values.map((g) => g.toJson()).toList(),
         'star': star.toJson(),
-        'sound': sound,
         'haptics': haptics,
         'lastCat': lastCat,
       };
@@ -505,11 +502,6 @@ class AppStore extends ChangeNotifier {
     star.cap = cap;
     _commit();
     checkStar();
-  }
-
-  void setSound(bool v) {
-    sound = v;
-    _commit();
   }
 
   void setHaptics(bool v) {

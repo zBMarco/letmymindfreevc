@@ -6,6 +6,7 @@ import '../models.dart';
 import '../star/solar_system.dart';
 import '../store.dart';
 import 'pages_tasks.dart';
+import 'star_explorer.dart';
 import 'theme.dart';
 
 const _bottomPad = 170.0;
@@ -26,7 +27,9 @@ class StarPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, _bottomPad),
       children: [
-        AspectRatio(
+        GestureDetector(
+          onTap: () => openStarExplorer(context, store),
+          child: AspectRatio(
           aspectRatio: 1,
           child: Container(
             decoration: BoxDecoration(
@@ -82,7 +85,21 @@ class StarPage extends StatelessWidget {
                   ),
                 ),
               ),
+              Positioned(
+                right: 14,
+                bottom: 16,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: .45), borderRadius: BorderRadius.circular(99), border: Border.all(color: C.line2)),
+                  child: Row(children: [
+                    const Icon(Icons.zoom_out_map_rounded, size: 15, color: C.text),
+                    const SizedBox(width: 6),
+                    Text('Explorar', style: sora(12.5, w: FontWeight.w600)),
+                  ]),
+                ),
+              ),
             ]),
+          ),
           ),
         ),
         const SizedBox(height: 14),

@@ -175,12 +175,22 @@ class StarFx extends ChangeNotifier {
   }
 }
 
+/// Where the viewer looks from in the explorer. Mutated by gestures; read every frame.
+class StarCamera {
+  double yaw = 0, pitch = 0, panX = 0, panY = 0, zoom = 1;
+  bool space = false;
+  double detail = 1;
+}
+
 /// Draws the star with the fragment shader. [detail] 1 = observatory, 0 = small header star.
 /// [zoom] scales the star inside the box (the mini view crops tighter).
 class StarView extends StatefulWidget {
   final double detail;
   final double zoom;
-  const StarView({super.key, this.detail = 1, this.zoom = 1});
+
+  /// When set, the camera drives orbit, pan, zoom and detail (the explorer).
+  final StarCamera? camera;
+  const StarView({super.key, this.detail = 1, this.zoom = 1, this.camera});
   @override
   State<StarView> createState() => _StarViewState();
 }
@@ -219,7 +229,7 @@ class _StarViewState extends State<StarView> with SingleTickerProviderStateMixin
       );
     }
     return RepaintBoundary(
-      child: CustomPaint(painter: _StarPainter(prog.fragmentShader(), _repaint, widget.detail, widget.zoom), size: Size.infinite),
+      child: CustomPaint(painter: _StarPainter(prog.fragmentShader(), _repaint, widget.detail, widget.zoom, widget.camera), size: Size.infinite),
     );
   }
 }
@@ -227,7 +237,8 @@ class _StarViewState extends State<StarView> with SingleTickerProviderStateMixin
 class _StarPainter extends CustomPainter {
   final ui.FragmentShader shader;
   final double detail, zoom;
-  _StarPainter(this.shader, Listenable repaint, this.detail, this.zoom) : super(repaint: repaint);
+  final StarCamera? cam;
+  _StarPainter(this.shader, Listenable repaint, this.detail, this.zoom, this.cam) : super(repaint: repaint);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -251,8 +262,14 @@ class _StarPainter extends CustomPainter {
     s.setFloat(i++, u.offY);
     s.setFloat(i++, u.shakeX);
     s.setFloat(i++, u.shakeY);
-    s.setFloat(i++, detail);
-    s.setFloat(i++, zoom);
+    final c = cam;
+    s.setFloat(i++, c?.detail ?? detail);
+    s.setFloat(i++, c?.zoom ?? zoom);
+    s.setFloat(i++, c?.yaw ?? 0);
+    s.setFloat(i++, c?.pitch ?? 0);
+    s.setFloat(i++, c?.panX ?? 0);
+    s.setFloat(i++, c?.panY ?? 0);
+    s.setFloat(i++, c != null && c.space ? 1 : 0);
     canvas.drawRect(Offset.zero & size, Paint()..shader = s);
   }
 

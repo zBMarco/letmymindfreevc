@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 
 import '../models.dart';
 import '../services/reminders.dart';
-import '../services/sound.dart';
 import '../store.dart';
 import 'pages_tasks.dart';
 import 'theme.dart';
@@ -71,7 +70,6 @@ class _TaskSheetState extends State<_TaskSheet> {
       // On the web, the iPhone Calendar is what sends the reminders; hand it the event
       // while we're still inside the tap (Safari only allows it then).
       if (kIsWeb && hasDue && remind) Reminders.instance.addToCalendar(t);
-      SoundEngine.instance.play('add', volume: .8);
       if (s.haptics) HapticFeedback.lightImpact();
     }
     Navigator.of(context).pop();

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
-import '../services/sound.dart';
 import '../store.dart';
 import 'pages_tasks.dart';
 import 'theme.dart';
@@ -893,7 +892,6 @@ class _GoalSheetState extends State<_GoalSheet> {
       s.updateGoal(widget.edit!.id, title: text, why: why.text.trim(), color: color, target: t);
     } else {
       s.addGoal(title: text, why: why.text.trim(), color: color, target: t);
-      SoundEngine.instance.play('add', volume: .8);
       if (s.haptics) HapticFeedback.lightImpact();
     }
     Navigator.of(context).pop();

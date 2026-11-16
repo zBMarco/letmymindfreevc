@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
-import '../services/sound.dart';
 import '../star/star_fx.dart';
 import '../store.dart';
 import 'celebration.dart';
 import 'pages_goals.dart';
 import 'pages_star_stats.dart';
+import 'star_explorer.dart';
 import 'pages_tasks.dart';
 import 'pages_types.dart';
 import 'task_sheet.dart';
@@ -43,6 +43,8 @@ class _ShellState extends State<Shell> {
       if (rw != null && rw >= 0 && rw < rewards.length) {
         WidgetsBinding.instance.addPostFrameCallback((_) => showRewardUnlock(context, rewards[rw]));
       }
+      final ex = double.tryParse(q['explore'] ?? '');
+      if (ex != null) WidgetsBinding.instance.addPostFrameCallback((_) => openStarExplorer(context, store, zoom: ex));
     }
     _sub = store.events.listen(_onEvent);
     store.addListener(_syncFx);
@@ -89,9 +91,6 @@ class _ShellState extends State<Shell> {
 
   void _syncFx() {
     fx.sync(load: store.load, nebula: store.star.phase == Phase.nebula, seed: store.star.progress / rebirthNeed);
-    SoundEngine.instance.enabled = store.sound;
-    final idx = store.star.phase == Phase.nebula ? -1 : starLevels.indexOf(store.level).clamp(0, 3);
-    SoundEngine.instance.setHum(idx);
   }
 
   Future<void> _haptic(List<(int, String)> pattern) async {
@@ -115,11 +114,9 @@ class _ShellState extends State<Shell> {
     switch (e) {
       case TaskCompleted(:final task, :final pctFreed, :final inNebula):
         if (inNebula) {
-          SoundEngine.instance.play('chime');
           _haptic([(0, 'medium'), (120, 'light')]);
         } else {
           fx.flare();
-          SoundEngine.instance.play('flare');
           _haptic([(0, 'heavy'), (90, 'heavy'), (160, 'medium'), (220, 'light')]);
         }
         final lines = celebrationLines[task.size] ?? celebrationLines[1]!;
@@ -132,20 +129,17 @@ class _ShellState extends State<Shell> {
       case Supernova():
         setState(() => tab = 1);
         fx.explode();
-        SoundEngine.instance.play('boom');
         _haptic([(0, 'heavy'), (60, 'heavy'), (60, 'heavy'), (120, 'heavy'), (200, 'medium'), (300, 'light'), (400, 'light')]);
         Future.delayed(const Duration(milliseconds: 700), () => stamp.value = ('¡Supernova!', false));
         Future.delayed(const Duration(milliseconds: 3400), () => stamp.value = null);
       case GoalChecked(:final goal, :final streak, :final unlocked):
         if (unlocked != null) {
           fx.flare();
-          SoundEngine.instance.play('rebirth');
           _haptic([(0, 'light'), (200, 'medium'), (200, 'heavy'), (300, 'heavy'), (400, 'medium')]);
           showRewardUnlock(context, unlocked);
         } else if (streak > 0) {
           // first goal kept today: the streak grows
           fx.flare();
-          SoundEngine.instance.play('chime');
           _haptic([(0, 'heavy'), (110, 'medium'), (120, 'light')]);
           final next = store.nextReward;
           final left = next == null ? 0 : next.days - streak;
@@ -159,12 +153,10 @@ class _ShellState extends State<Shell> {
           );
         } else {
           // another goal on a day that already counted
-          SoundEngine.instance.play('add', volume: .8);
           _haptic([(0, 'medium'), (90, 'light')]);
         }
       case GoalAchieved(:final goal):
         fx.flare();
-        SoundEngine.instance.play('flare');
         _haptic([(0, 'heavy'), (90, 'heavy'), (160, 'heavy'), (220, 'medium'), (300, 'light')]);
         showCelebration(
           context,
@@ -179,7 +171,6 @@ class _ShellState extends State<Shell> {
           if (!mounted) return;
           setState(() => tab = 1);
           fx.rebirth();
-          SoundEngine.instance.play('rebirth');
           _haptic([(0, 'light'), (300, 'medium'), (500, 'heavy')]);
           Future.delayed(const Duration(milliseconds: 1100), () => stamp.value = ('¡Renació! #${store.star.rebirths}', true));
           Future.delayed(const Duration(milliseconds: 3800), () => stamp.value = null);
@@ -274,7 +265,14 @@ class _Header extends StatelessWidget {
         blur: true,
         padding: const EdgeInsets.fromLTRB(6, 8, 16, 8),
         child: Row(children: [
-          const SizedBox(width: 72, height: 72, child: ClipOval(child: StarView(detail: 0, zoom: 2.1))),
+          Semantics(
+            button: true,
+            label: 'Explorar mi estrella',
+            child: GestureDetector(
+              onTap: () => openStarExplorer(context, store),
+              child: const SizedBox(width: 72, height: 72, child: ClipOval(child: StarView(detail: 0, zoom: 2.1))),
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
