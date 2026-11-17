@@ -67,6 +67,42 @@ void main() {
     expect(store.upcoming.length, 1);
   });
 
+  test('reabrir una tarea repetitiva no deja la siguiente duplicada', () {
+    final t = store.addTask(title: 'meditar', size: 1, repeat: Repeat.daily);
+    store.complete(t.id);
+    expect(store.tasks.length, 2);
+    store.reopen(t.id);
+    expect(store.tasks.length, 1);
+    expect(store.tasks[t.id]!.completedAt, isNull);
+    // completing it again spawns exactly one next occurrence
+    store.complete(t.id);
+    expect(store.tasks.values.where((x) => x.completedAt == null).length, 1);
+  });
+
+  test('la racha de tareas cuenta días seguidos', () {
+    final a = store.addTask(title: 'a');
+    store.complete(a.id);
+    expect(store.streak, 1);
+    final b = store.addTask(title: 'b');
+    store.complete(b.id);
+    store.tasks[b.id]!.completedAt = DateTime.now().subtract(const Duration(days: 1)).millisecondsSinceEpoch;
+    expect(store.streak, 2);
+  });
+
+  test('recuerda hacer respaldo y se calla al guardarlo', () {
+    expect(store.needsBackup, isFalse); // nothing to lose yet
+    final t = store.addTask(title: 'a');
+    expect(store.needsBackup, isFalse); // too new
+    t.createdAt = nowMs() - 4 * 86400000;
+    expect(store.needsBackup, isTrue);
+    store.snoozeBackup();
+    expect(store.needsBackup, isFalse);
+    store.markBackedUp();
+    expect(store.needsBackup, isFalse);
+    store.lastBackup = nowMs() - 8 * 86400000;
+    expect(store.needsBackup, isTrue);
+  });
+
   test('los datos se guardan y se vuelven a cargar', () async {
     store.addCat('Casa', 0xFFFFD27A);
     store.addTask(title: 'lavar', size: 2, catId: store.sortedCats.first.id);

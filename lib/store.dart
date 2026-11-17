@@ -45,6 +45,10 @@ class AppStore extends ChangeNotifier {
   bool haptics = true;
   String? lastCat;
 
+  /// When the last backup was saved, and until when the "save a backup" nudge stays quiet.
+  int? lastBackup;
+  int? backupSnoozeUntil;
+
   final _events = StreamController<StarEvent>.broadcast();
   Stream<StarEvent> get events => _events.stream;
 
@@ -104,6 +108,8 @@ class AppStore extends ChangeNotifier {
     star = newStar;
     haptics = j['haptics'] as bool? ?? true;
     lastCat = j['lastCat'] as String?;
+    lastBackup = j['lastBackup'] as int?;
+    backupSnoozeUntil = j['backupSnoozeUntil'] as int?;
   }
 
   Map<String, dynamic> _snapshot() => {
@@ -115,6 +121,8 @@ class AppStore extends ChangeNotifier {
         'star': star.toJson(),
         'haptics': haptics,
         'lastCat': lastCat,
+        'lastBackup': lastBackup,
+        'backupSnoozeUntil': backupSnoozeUntil,
       };
 
   void _save() => _prefs?.setString(_key, jsonEncode(_snapshot()));
@@ -134,6 +142,29 @@ class AppStore extends ChangeNotifier {
     }
     _commit();
     return true;
+  }
+
+  static const _day = 86400000;
+
+  /// True when it's time to remind you to save a backup: a week since the last one,
+  /// or 3 days of use without ever saving one.
+  bool get needsBackup {
+    final n = nowMs();
+    if (backupSnoozeUntil != null && n < backupSnoozeUntil!) return false;
+    if (lastBackup != null) return n - lastBackup! > 7 * _day;
+    final since = [...tasks.values.map((t) => t.createdAt), ...goals.values.map((g) => g.createdAt)];
+    return since.isNotEmpty && n - since.reduce(min) > 3 * _day;
+  }
+
+  void markBackedUp() {
+    lastBackup = nowMs();
+    backupSnoozeUntil = null;
+    _commit();
+  }
+
+  void snoozeBackup() {
+    backupSnoozeUntil = nowMs() + 3 * _day;
+    _commit();
   }
 
   void _commit() {
@@ -170,17 +201,7 @@ class AppStore extends ChangeNotifier {
 
   List<Task> get doneToday => done.where((t) => dayKey(t.completedAt!) == dayKey(nowMs())).toList();
 
-  int get streak {
-    final days = done.map((t) => dayKey(t.completedAt!)).toSet();
-    var d = DateTime.now();
-    if (!days.contains(dayKey(d.millisecondsSinceEpoch))) d = d.subtract(const Duration(days: 1));
-    var n = 0;
-    while (days.contains(dayKey(d.millisecondsSinceEpoch))) {
-      n++;
-      d = d.subtract(const Duration(days: 1));
-    }
-    return n;
-  }
+  int get streak => streakOf(done.map((t) => dayKey(t.completedAt!)).toSet());
 
   double catLoad(String id) => tasks.values.where((t) => t.catId == id).fold<double>(0, (a, t) => a + t.load);
 
@@ -271,6 +292,7 @@ class AppStore extends ChangeNotifier {
     if (t.repeat != Repeat.none) {
       final next = _nextOccurrence(t);
       tasks[next.id] = next;
+      t.nextId = next.id;
       Reminders.instance.schedule(next);
     }
     var inNebula = false;
@@ -337,7 +359,14 @@ class AppStore extends ChangeNotifier {
 
   void reopen(String id) {
     final t = tasks[id];
-    if (t == null) return;
+    if (t == null || t.completedAt == null) return;
+    // A repeating task already spawned its next occurrence; reopening takes it back.
+    final next = t.nextId == null ? null : tasks[t.nextId];
+    if (next != null && next.completedAt == null) {
+      tasks.remove(next.id);
+      Reminders.instance.cancel(next);
+    }
+    t.nextId = null;
     t.completedAt = null;
     t.log.add(LogEntry(nowMs(), 'reopened'));
     _commit();

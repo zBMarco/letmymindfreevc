@@ -217,12 +217,12 @@ class _TypesPageState extends State<TypesPage> {
               Text('RESPALDO', style: label()),
               const SizedBox(height: 8),
               Text('Tus datos viven en este iPhone. Guarda un respaldo de vez en cuando en Archivos o iCloud; si borras la app del inicio, se borran.', style: sora(13, color: C.faint, height: 1.4)),
+              const SizedBox(height: 6),
+              Text(store.lastBackup == null ? 'Aún no guardas ninguno.' : 'Último respaldo: ${fmtDay(store.lastBackup!)}.', style: sora(13, color: C.muted)),
               const SizedBox(height: 12),
               Wrap(spacing: 10, runSpacing: 10, children: [
                 Pill('Guardar respaldo', small: true, color: C.sky, icon: Icons.ios_share_rounded, onTap: () async {
-                  final d = DateTime.now();
-                  final name = 'mi-estrella-${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}.json';
-                  final ok = await saveTextFile(name, 'application/json', store.exportBackup(), share: true);
+                  final ok = await saveBackup(store);
                   if (!ok && context.mounted) _toast('No se pudo guardar el respaldo.');
                 }),
                 Pill('Restaurar', small: true, icon: Icons.restore_rounded, onTap: _restore),
@@ -233,4 +233,13 @@ class _TypesPageState extends State<TypesPage> {
       ],
     );
   }
+}
+
+/// Saves a full backup through the share sheet (Files / iCloud) and remembers when.
+Future<bool> saveBackup(AppStore store) async {
+  final d = DateTime.now();
+  final name = 'mi-estrella-${d.year}-${two(d.month)}-${two(d.day)}.json';
+  final ok = await saveTextFile(name, 'application/json', store.exportBackup(), share: true);
+  if (ok) store.markBackedUp();
+  return ok;
 }

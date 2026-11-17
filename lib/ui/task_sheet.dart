@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
+import '../quick_date.dart';
 import '../services/reminders.dart';
 import '../store.dart';
 import 'pages_tasks.dart';
@@ -40,6 +41,50 @@ class _TaskSheetState extends State<_TaskSheet> {
   late bool remind = widget.edit?.remind ?? true;
   String? error;
 
+  /// Quick capture: a date written in the title ("pagar la luz mañana 5pm").
+  QuickDate? detected;
+  bool ignoreDetected = false;
+  bool dueTouched = false; // you set the date yourself, so the text no longer drives it
+  bool autoDue = false; // the date toggle was turned on by the text
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.edit == null) title.addListener(_detect);
+  }
+
+  void _detect() {
+    final q = parseQuickDate(title.text);
+    if (q?.due == detected?.due && q?.title == detected?.title) return;
+    setState(() {
+      detected = q;
+      if (ignoreDetected || dueTouched) return;
+      if (q != null) {
+        hasDue = true;
+        due = q.due;
+        autoDue = true;
+      } else if (autoDue) {
+        hasDue = false;
+        due = _defaultDue();
+        autoDue = false;
+      }
+    });
+  }
+
+  void _ignoreDetected() {
+    _tap();
+    setState(() {
+      ignoreDetected = true;
+      if (autoDue && !dueTouched) {
+        hasDue = false;
+        due = _defaultDue();
+      }
+      autoDue = false;
+    });
+  }
+
+  bool get _usingDetected => detected != null && !ignoreDetected && detected!.title.isNotEmpty;
+
   static DateTime _defaultDue() {
     final n = DateTime.now();
     return DateTime(n.year, n.month, n.day + 1, 10);
@@ -57,7 +102,7 @@ class _TaskSheetState extends State<_TaskSheet> {
   }
 
   void _save() {
-    final text = title.text.trim();
+    final text = _usingDetected ? detected!.title : title.text.trim();
     if (text.isEmpty) {
       setState(() => error = 'Escribe qué tienes que hacer.');
       return;
@@ -104,7 +149,10 @@ class _TaskSheetState extends State<_TaskSheet> {
         ),
       ),
     );
-    setState(() => due = picked);
+    setState(() {
+      if (picked != due) dueTouched = true;
+      due = picked;
+    });
   }
 
   @override
@@ -131,7 +179,34 @@ class _TaskSheetState extends State<_TaskSheet> {
                 const SizedBox(height: 12),
                 Text(widget.edit != null ? 'Editar' : '¿Qué te pesa?', style: sora(24, w: FontWeight.w600)),
                 const SizedBox(height: 14),
-                GlassField(controller: title, hint: 'Ej. Pagar la tarjeta', onSubmit: (_) => _save()),
+                GlassField(controller: title, hint: widget.edit == null ? 'Ej. Pagar la tarjeta mañana 5pm' : 'Ej. Pagar la tarjeta', onSubmit: (_) => _save()),
+                if (_usingDetected)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .06), borderRadius: BorderRadius.circular(14), border: Border.all(color: C.line)),
+                      child: Row(children: [
+                        Icon(Icons.event_available_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text.rich(
+                            TextSpan(children: [
+                              TextSpan(text: dueTouched ? 'Fecha: ' : 'Vence ', style: sora(13, color: C.muted)),
+                              TextSpan(text: describeDue(due), style: sora(13, w: FontWeight.w600)),
+                              TextSpan(text: ' · se guarda como “${detected!.title}”', style: sora(13, color: C.muted)),
+                            ]),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'No es una fecha',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.close_rounded, size: 18, color: C.faint),
+                          onPressed: _ignoreDetected,
+                        ),
+                      ]),
+                    ),
+                  ),
                 if (error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(error!, style: sora(13, color: C.hot))),
                 const SizedBox(height: 18),
                 Text('TIPO', style: label()),
@@ -175,7 +250,10 @@ class _TaskSheetState extends State<_TaskSheet> {
                     Expanded(child: Text('Fecha límite', style: sora(16, w: FontWeight.w500))),
                     Toggle(value: hasDue, onChanged: (v) {
                       _tap();
-                      setState(() => hasDue = v);
+                      setState(() {
+                        hasDue = v;
+                        dueTouched = true;
+                      });
                     }),
                   ]),
                   if (hasDue) ...[

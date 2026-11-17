@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../models.dart';
 import '../services/reminders.dart';
 import '../store.dart';
+import 'pages_types.dart';
 import 'theme.dart';
 
 const _bottomPad = 170.0;
@@ -57,6 +58,7 @@ class _TasksPageState extends State<TasksPage> {
       if (nebula) HopeBanner(store: store),
       if (!nebula && load > .75)
         _Warn('Tu estrella está al límite (${(load * 100).round()}%). Suelta algo chico hoy para calmarla.'),
+      if (kIsWeb && store.needsBackup) _BackupNudge(store: store),
       if (cats.isNotEmpty)
         SizedBox(
           height: 40,
@@ -175,6 +177,33 @@ class HopeBanner extends StatelessWidget {
       ]),
     );
   }
+}
+
+class _BackupNudge extends StatelessWidget {
+  final AppStore store;
+  const _BackupNudge({required this.store});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        decoration: BoxDecoration(
+          color: C.sky.withValues(alpha: .10),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: C.sky.withValues(alpha: .35)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+            store.lastBackup == null
+                ? 'Aún no guardas un respaldo. Safari puede borrar los datos de una web que no abres seguido; guárdalo en Archivos o iCloud.'
+                : 'Hace más de una semana de tu último respaldo (${fmtDay(store.lastBackup!)}).',
+            style: sora(14, color: C.text, height: 1.4),
+          ),
+          const SizedBox(height: 10),
+          Wrap(spacing: 10, runSpacing: 8, children: [
+            Pill('Guardar respaldo', small: true, color: C.sky, icon: Icons.ios_share_rounded, onTap: () => saveBackup(store)),
+            Pill('Luego', small: true, onTap: store.snoozeBackup),
+          ]),
+        ]),
+      );
 }
 
 class _Warn extends StatefulWidget {

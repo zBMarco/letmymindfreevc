@@ -7,16 +7,17 @@ To-do para soltar lo que te estresa. Cada tarea pendiente le suma carga a tu est
 - **Estrella realista dibujada en la GPU** (`shaders/star.frag`): granulación celular (ruido Worley), rotación diferencial, oscurecimiento del borde, manchas solares, espículas, corona y llamaradas que siguen las líneas de un campo magnético dipolar (`r = L·sin²θ`).
 - **Cinco estados** (Radiante, Tranquila, Inquieta, Al límite, Supernova), más la nebulosa y el renacimiento.
 - **Tareas** con tipo, tamaño (Chica a Monstruo), fecha límite opcional, repetición (diaria, semanal o mensual), subtareas, notas, cronómetro y traza completa.
+- **Captura rápida con fecha en texto**: escribe "pagar la luz mañana 5pm", "dentista el viernes a las 4", "reporte 15 dic" o "llamar en 2 horas" y la fecha límite se llena sola; la tarea se guarda como "pagar la luz". Con la ✕ lo ignoras.
 - **Recordatorios en el iPhone**: notificaciones 1 día, 3 h, 1 h y 30 min antes, y al vencer. No necesitan servidor.
 - **Agregar al Calendario de iOS** desde el detalle de la tarea.
-- **Explorador de la estrella**: toca tu estrella (en el encabezado o en *Estrella › Explorar*) para verla en pantalla completa en el espacio profundo, con la Vía Láctea y estrellas de fondo con su color real. Arrastra para girarla y ver sus polos, pellizca (o usa la rueda del ratón) para acercarte hasta ver la granulación y las manchas, y mueve la vista con dos dedos. Doble toque la centra. Abajo te explica lo que estás viendo, y su ficha muestra tipo, clase espectral y temperatura.
+- **Explorador de la estrella**: toca tu estrella (en el encabezado o en *Estrella › Explorar*) para verla en pantalla completa en el espacio profundo, con la Vía Láctea y estrellas de fondo con su color real. Arrastra para girarla y ver sus polos, pellizca (o usa la rueda del ratón) para acercarte hasta ver la granulación y las manchas, y mueve la vista con dos dedos. Doble toque la centra. Con el botón ⚡ provocas una llamarada (si estás de cerca, la cámara viaja al borde para verla), y también hace erupciones solas, más seguido mientras más estresada está. De cerca, los arcos y las protuberancias se ven como hilos de plasma siguiendo el campo magnético. Abajo te explica lo que estás viendo, y su ficha muestra tipo, clase espectral y temperatura.
 - **Vibración** del iPhone (la app no tiene sonido).
 - **Progreso**: racha de días, tareas por día, tiempos, avance por tipo e historial.
 - **Metas**: escribe lo que quieres lograr y para qué, con fecha opcional. Cada día que avanzas en al menos una, tu **racha de constancia** crece. A los 3, 7, 14, 21, 30, 50, 75, 100, 150, 200 y 365 días ganas una **constelación** que se dibuja con una animación y queda brillando para siempre en el cielo de fondo de la app. Un punto naranja en la pestaña te avisa si hoy aún no cumples ninguna.
 - **Sistema solar** (`shaders/planet.frag`, `lib/star/solar_system.dart`): cada tipo de tarea es un planeta (rocoso, gigante gaseoso con anillos o helado) iluminado por la estrella. Crece con su carga, y su órbita se acerca a la estrella cuando se acerca la fecha límite. Cada subtarea pendiente es una luna, y cada tarea terminada queda como una roca en el cinturón de asteroides. En la supernova los planetas salen disparados y al renacer se vuelven a formar.
 - **Estrella con temperatura real por punto**: color de cuerpo negro (ley de Planck) en cada gránulo, mancha y borde, tono fílmico ACES y resplandor de cámara. Las llamaradas son tubos de plasma con volumen.
 - **Funciona sin internet** en la versión web (`web/sw.js`) después de abrirla una vez.
-- Los datos se guardan en el teléfono. Puedes exportar e importar un respaldo desde *Tipos*.
+- Los datos se guardan en el teléfono. Puedes exportar e importar un respaldo desde *Tipos*. En la web, la app pide al navegador que no borre sus datos y te recuerda guardar un respaldo si llevas una semana sin hacerlo (o 3 días de uso sin ninguno).
 
 ## Probarla en tu computadora
 
@@ -24,7 +25,7 @@ To-do para soltar lo que te estresa. Cada tarea pendiente le suma carga a tu est
 flutter run -d chrome
 ```
 
-Parámetros útiles solo en el navegador: `?demo=1` (tareas de ejemplo, con lunas y asteroides), `?sw=1` (activa el modo sin conexión en localhost), `?tab=1` (abre la estrella), `?ft=0.5` (congela una llamarada), `?icon=1` (dibuja el ícono), `?reward=0` a `?reward=10` (muestra la animación de una constelación ganada), `?explore=1` (abre el explorador; `?explore=6` ya acercado).
+Parámetros útiles solo en el navegador: `?demo=1` (tareas de ejemplo, con lunas y asteroides), `?sw=1` (activa el modo sin conexión en localhost), `?tab=1` (abre la estrella), `?ft=0.5` (congela una llamarada), `?icon=1` (dibuja el ícono), `?reward=0` a `?reward=10` (muestra la animación de una constelación ganada), `?explore=1` (abre el explorador; `?explore=6` ya acercado; con `&ft=0.45` mira una llamarada congelada).
 
 ## Instalarla en tu iPhone gratis
 

@@ -54,6 +54,9 @@ class Task {
   int? runningSince;
   int? completedAt;
   int? showFrom;
+
+  /// For a repeating task that was completed: the next occurrence it created.
+  String? nextId;
   List<LogEntry> log;
 
   Task({
@@ -71,6 +74,7 @@ class Task {
     this.runningSince,
     this.completedAt,
     this.showFrom,
+    this.nextId,
     List<LogEntry>? log,
   })  : subs = subs ?? [],
         log = log ?? [];
@@ -103,6 +107,7 @@ class Task {
         'runningSince': runningSince,
         'completedAt': completedAt,
         'showFrom': showFrom,
+        if (nextId != null) 'nextId': nextId,
         'log': log.map((l) => l.toJson()).toList(),
       };
 
@@ -121,6 +126,7 @@ class Task {
         runningSince: j['runningSince'] as int?,
         completedAt: j['completedAt'] as int?,
         showFrom: j['showFrom'] as int?,
+        nextId: j['nextId'] as String?,
         log: (j['log'] as List? ?? []).map((l) => LogEntry.fromJson(Map<String, dynamic>.from(l))).toList(),
       );
 

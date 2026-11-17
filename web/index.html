@@ -49,6 +49,13 @@
       });
     }
   </script>
+  <script>
+    // Asks Safari/Chrome not to evict this app's saved data when space runs low
+    // or after days without opening it (granted automatically to home-screen apps).
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persisted().then(function (p) { if (!p) navigator.storage.persist(); }).catch(function () {});
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
