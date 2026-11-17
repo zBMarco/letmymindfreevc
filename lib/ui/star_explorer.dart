@@ -90,6 +90,13 @@ class _StarExplorerState extends State<StarExplorer> with SingleTickerProviderSt
   bool hint = true;
   double _idle = 0;
 
+  // eruptions
+  final _rnd = Random();
+  double _nextAuto = 0;
+  bool _erupting = false;
+  double? _flyT;
+  double _flyFromX = 0, _flyFromY = 0, _flyToX = 0, _flyToY = 0, _flyAngle = 0;
+
   // reset animation
   double? _resetT;
   late double _fromYaw, _fromPitch, _fromZoom, _fromPx, _fromPy;
@@ -102,6 +109,14 @@ class _StarExplorerState extends State<StarExplorer> with SingleTickerProviderSt
     cam.zoom = (_baseZoom * widget.zoom).clamp(_minZoom, _maxZoom);
     cam.detail = 1 + ((cam.zoom - 2.4) / 2.4).clamp(0.0, 1.0);
     _zoomLevel = cam.zoom < 2.6 ? 0 : (cam.zoom < 6 ? 1 : 2);
+    _scheduleAuto(first: true);
+    if (fx.debugFlareT != null && cam.zoom > 2.6) {
+      // browser preview (?ft=): look at the frozen flare (it erupts at angle .8)
+      final r = .16 * (.8 + .55 * min(store.load, 1.1)) * 1.12;
+      cam
+        ..panX = cos(.8) * r
+        ..panY = sin(.8) * r;
+    }
     _ticker = createTicker(_tick)..start();
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) setState(() => hint = false);
@@ -116,9 +131,71 @@ class _StarExplorerState extends State<StarExplorer> with SingleTickerProviderSt
 
   double get _px => 1 / max(1.0, MediaQuery.of(context).size.shortestSide);
 
+  /// Radius of the star in view units (same formula as StarFx, without the wobble).
+  double get _starR => .16 * (.8 + .55 * min(fx.smoothLoad, 1.1));
+
+  bool get _nebula => store.star.phase == Phase.nebula;
+
+  /// Stressed stars are more active: eruptions every ~7 s near the limit, every ~14 s when calm.
+  void _scheduleAuto({bool first = false}) {
+    final calm = 14 - 8 * store.load.clamp(0.0, 1.0);
+    _nextAuto = fx.time + (first ? 2.5 : calm * (.7 + .6 * _rnd.nextDouble()));
+  }
+
+  void _autoErupt() {
+    _scheduleAuto();
+    if (_nebula || _dragging || _flyT != null) return;
+    if (cam.zoom < 2.6) {
+      fx.eruption(_rnd.nextDouble() * pi * 2);
+      return;
+    }
+    // zoomed in: only when you're already looking at the edge (never yank the camera on its own)
+    final d = sqrt(cam.panX * cam.panX + cam.panY * cam.panY);
+    if (d > _starR * .7) fx.eruption(atan2(cam.panY, cam.panX) + (_rnd.nextDouble() - .5) * .5);
+  }
+
+  /// The flare button: far away it erupts right away; zoomed in, the camera first flies
+  /// to the nearest edge so you can watch it from up close.
+  void _flareNow() {
+    if (_nebula) return;
+    if (store.haptics) HapticFeedback.heavyImpact();
+    _resetT = null;
+    final d = sqrt(cam.panX * cam.panX + cam.panY * cam.panY);
+    final angle = d > _starR * .05 ? atan2(cam.panY, cam.panX) : _rnd.nextDouble() * pi * 2;
+    if (cam.zoom < 2.6) {
+      fx.eruption(angle);
+      _scheduleAuto();
+      return;
+    }
+    final r = _starR * 1.12;
+    _flyFromX = cam.panX;
+    _flyFromY = cam.panY;
+    _flyToX = cos(angle) * r;
+    _flyToY = sin(angle) * r;
+    _flyAngle = angle;
+    _flyT = 0;
+  }
+
   void _tick(Duration e) {
     final dt = _last == Duration.zero ? .016 : ((e - _last).inMicroseconds / 1e6).clamp(0.0, .05);
     _last = e;
+    final erupting = fx.flaring;
+    if (erupting != _erupting) setState(() => _erupting = erupting);
+    if (!erupting && fx.time > _nextAuto) _autoErupt();
+    final ft = _flyT;
+    if (ft != null) {
+      final t = min(1.0, ft + dt / .9);
+      final k = Curves.easeInOutCubic.transform(t);
+      cam
+        ..panX = _flyFromX + (_flyToX - _flyFromX) * k
+        ..panY = _flyFromY + (_flyToY - _flyFromY) * k;
+      _flyT = t >= 1 ? null : t;
+      if (t >= 1) {
+        fx.eruption(_flyAngle);
+        _scheduleAuto();
+        if (store.haptics) HapticFeedback.mediumImpact();
+      }
+    }
     final rt = _resetT;
     if (rt != null) {
       final t = min(1.0, rt + dt / .7);
@@ -157,6 +234,7 @@ class _StarExplorerState extends State<StarExplorer> with SingleTickerProviderSt
   void _onScaleStart(ScaleStartDetails d) {
     _dragging = true;
     _resetT = null;
+    _flyT = null;
     _startZoom = cam.zoom;
     _lastFocal = d.focalPoint;
     _vYaw = _vPitch = 0;
@@ -230,6 +308,11 @@ class _StarExplorerState extends State<StarExplorer> with SingleTickerProviderSt
 
   String _caption(double load, bool nebula) {
     if (nebula) return 'Nebulosa: gas y polvo de tu supernova. Aquí se está formando tu nueva estrella.';
+    if (_erupting) {
+      return _zoomLevel == 0
+          ? 'Llamarada: el campo magnético se enreda, se rompe y se reconecta. Suelta en minutos tanta energía que lanza plasma al espacio.'
+          : 'De cerca: el plasma brilla siguiendo las líneas del campo magnético, como hilos. Los arcos se encienden uno por uno y el de arriba sale disparado (eyección de masa coronal).';
+    }
     final spots = load > .5;
     return switch (_zoomLevel) {
       0 => 'La corona: gas a más de un millón de grados que escapa de la superficie. Los arcos rojos del borde son protuberancias.',
@@ -309,6 +392,10 @@ class _StarExplorerState extends State<StarExplorer> with SingleTickerProviderSt
               right: 14,
               top: MediaQuery.of(context).size.height * .38,
               child: Column(children: [
+                if (store.star.phase != Phase.nebula) ...[
+                  _RoundBtn(icon: Icons.bolt_rounded, label: 'Provocar una llamarada', on: _erupting, onTap: _flareNow),
+                  const SizedBox(height: 16),
+                ],
                 _RoundBtn(icon: Icons.add_rounded, label: 'Acercar', onTap: () => _zoomBy(1.6)),
                 const SizedBox(height: 8),
                 _RoundBtn(icon: Icons.remove_rounded, label: 'Alejar', onTap: () => _zoomBy(1 / 1.6)),
@@ -328,7 +415,7 @@ class _StarExplorerState extends State<StarExplorer> with SingleTickerProviderSt
                       blur: true,
                       radius: 99,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                      child: Text('Arrastra para girar · pellizca para acercar · doble toque para centrar', textAlign: TextAlign.center, style: sora(12, color: C.text)),
+                      child: Text('Arrastra para girar · pellizca para acercar · ⚡ para ver una llamarada', textAlign: TextAlign.center, style: sora(12, color: C.text)),
                     ),
                   ),
                 ),
@@ -362,7 +449,7 @@ class _StarExplorerState extends State<StarExplorer> with SingleTickerProviderSt
                           const SizedBox(height: 6),
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 400),
-                            child: Text(_caption(load, nebula), key: ValueKey('$_zoomLevel$nebula${load > .5}'), style: sora(13.5, color: C.text, height: 1.4)),
+                            child: Text(_caption(load, nebula), key: ValueKey('$_zoomLevel$nebula${load > .5}$_erupting'), style: sora(13.5, color: C.text, height: 1.4)),
                           ),
                           if (showInfo && !nebula) ...[
                             const SizedBox(height: 14),

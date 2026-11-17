@@ -39,6 +39,8 @@ class StarFx extends ChangeNotifier {
   double _sL = .3;
   Duration _last = Duration.zero;
   double _t0 = 0, _shrink = -10, _ring = -10, _flare = -10, _flareA = 0;
+  double _flareDur = 2.6;
+  bool _flareKick = true;
   double time = 0;
   bool reduced = false;
   /// Browser preview only: freezes a flare at this progress (0..1).
@@ -85,7 +87,21 @@ class StarFx extends ChangeNotifier {
     if (!nebula && mode == StarMode.nebula) mode = StarMode.star;
   }
 
+  /// True while a flare or eruption is on screen.
+  bool get flaring => time - _flare < _flareDur;
+
+  /// A slow eruption from the edge at [angle] (radians, 0 = right, counter-clockwise),
+  /// for watching up close: no shock ring, no shake.
+  void eruption(double angle) {
+    _flare = time;
+    _flareA = angle;
+    _flareDur = 7;
+    _flareKick = false;
+  }
+
   void flare() {
+    _flareDur = 2.6;
+    _flareKick = true;
     _flare = time;
     _flareA = _rnd.nextDouble() * pi * 2;
     _ring = time;
@@ -156,11 +172,11 @@ class StarFx extends ChangeNotifier {
       u.ringR = r * (1 + rk * 1.8);
       u.ringA = (1 - rk) * .9;
     }
-    final ft = (t - _flare) / 2.6;
+    final ft = (t - _flare) / _flareDur;
     if (ft >= 0 && ft < 1) {
       u.flareT = ft;
       u.flareA = _flareA;
-      if (!reduced) {
+      if (!reduced && _flareKick) {
         final amp = max(0.0, 1 - ft / .18) * .006;
         u.shakeX = (_rnd.nextDouble() - .5) * amp;
         u.shakeY = (_rnd.nextDouble() - .5) * amp;

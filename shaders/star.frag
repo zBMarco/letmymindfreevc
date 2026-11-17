@@ -162,6 +162,7 @@ void main(){
     bg = cosmos(orbit(normalize(vec3(sv*fov, -1.0))), px*fov*1.1);
   }
   float t = uTime, L = uLoad, R = max(uRadius, 0.0001);
+  float close = clamp(uDetail - 1.0, 0.0, 1.0);  // 1 = zoomed in: finer structure
   float agit = clamp((L - 0.42)/0.65, 0.0, 1.0);
   vec3 col = vec3(0.0);
   float solid = 0.0;  // opaque only over the stellar disk; glow and corona are light added on top
@@ -207,6 +208,11 @@ void main(){
     float band = smoothstep(0.0, 0.015, d)*(1.0 - smoothstep(0.03, 0.12 + agit*0.35, d));
     float loops = smoothstep(0.62 - agit*0.3, 0.95, fbm3(vec3(dir*3.5, t*0.07) + vec3(d*5.0, 0.0, 0.0)) + 0.35);
     float prom = band*loops*(0.25 + agit*1.8);
+    if (close > 0.0){
+      // up close a prominence is a curtain of thin threads of cooler plasma hanging in the field
+      float threads = 0.45 + 0.75*smoothstep(-0.2, 0.7, snoise(vec3(dir*160.0, d*6.0 + t*0.15)));
+      prom *= mix(1.0, threads, close);
+    }
     vec3 cc = mix(sc, vec3(1.0), 0.3);
     vec3 outside = cc*(corona + halo)*1.05 + vec3(1.0, 0.38, 0.22)*(prom*1.6 + spic*0.9*uDetail);
 
@@ -247,7 +253,6 @@ void main(){
       float mu = z;
       float limb = 1.0 - 0.6*(1.0 - mu) - 0.2*(1.0 - mu)*(1.0 - mu);
       // up close the granulation contrast and the umbra darkness approach what solar telescopes see
-      float close = clamp(uDetail - 1.0, 0.0, 1.0);
       float I = (1.25 + 0.16*big)*mix(mix(0.84, 0.5, close), mix(1.03, 1.12, close), gran)*(1.0 - 0.42*spots - (0.42 + 0.35*close)*umbra)*limb + faculae*0.22;
       // Every point has its own temperature: hot rising granule centers, cooler sinking lanes,
       // cold spots, hot faculae. Near the limb we see higher, cooler layers (gray atmosphere,
@@ -308,11 +313,15 @@ void main(){
         arcGlow += exp(-dl/(wk*5.0))*on*0.25;
       }
       arc *= knots;
+      // up close each loop is a bundle of thin strands, each glowing at its own brightness
+      float strands = 0.4 + 0.8*smoothstep(-0.35, 0.65, snoise(vec3(Lp*95.0, along*2.0, t*0.35)));
+      arc *= mix(1.0, strands, close);
       // erupting flux rope: ragged, broken, fading as it tears open
       float Le = 0.45 + rise*1.25;
       float tear = smoothstep(0.3, 0.75, ft);
       float broken = smoothstep(-0.15, 0.35, fbm3(vec3(along*4.0, t*0.3, ft*3.0)));
       float rope = exp(-abs(Lp - Le + turb*0.1)/(0.05 + 0.12*rise))*broken*(1.0 - 0.75*tear)*0.7;
+      rope *= mix(1.0, 0.5 + 0.8*smoothstep(-0.3, 0.6, snoise(vec3(Lp*40.0, along*6.0, t*0.5))), close);
       // CME: diffuse, wispy cloud expanding behind the rope (soft, not a balloon)
       float wisp = fbm3(vec3(q*2.2 - fd*ft*1.5, t*0.2)) * 0.5 + 0.5;
       float plume = smoothstep(Le*1.15, Le*0.35, Lp)*smoothstep(0.3, 0.6, Lp)*wisp*wisp*0.55*rise*(1.0 - 0.4*tear);
