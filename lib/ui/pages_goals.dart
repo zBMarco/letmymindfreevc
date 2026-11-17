@@ -51,7 +51,7 @@ class _GoalsPageState extends State<GoalsPage> {
     final achieved = store.achievedGoals;
     final children = <Widget>[
       Text('Mis metas', style: sora(28, w: FontWeight.w600, ls: -.5)),
-      Text('Lo que quieres lograr, siempre a la vista. Cumple al menos una cada día y tu racha crece.', style: sora(14, color: C.faint, height: 1.45)),
+      Text('Lo que quieres lograr, siempre a la vista. Tu racha crece cada día que completas al menos una tarea.', style: sora(14, color: C.faint, height: 1.45)),
       _StreakHero(store: store),
       _NextReward(store: store),
       if (active.isEmpty)
@@ -60,7 +60,7 @@ class _GoalsPageState extends State<GoalsPage> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(achieved.isEmpty ? '¿Qué quieres lograr?' : 'Todas tus metas están cumplidas.', style: sora(21, w: FontWeight.w600, height: 1.2)),
             const SizedBox(height: 10),
-            Text('Escribe tus metas y para qué las quieres. Cada día que avances en una, márcala: así nunca se te olvidan y tu racha de constancia dibuja constelaciones en tu cielo.',
+            Text('Escribe tus metas y para qué las quieres. Cada día que avances en una, márcala: así nunca se te olvidan. Y cada día que completas una tarea, tu racha dibuja constelaciones en tu cielo.',
                 style: sora(15, color: C.muted, height: 1.45)),
             const SizedBox(height: 16),
             Pill(achieved.isEmpty ? 'Escribir mi primera meta' : 'Nueva meta', primary: true, onTap: widget.onAdd),
@@ -135,26 +135,25 @@ class _StreakHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final streak = store.goalStreak;
-    final best = store.bestGoalStreak;
-    final today = store.goalDoneToday;
-    final days = store.goalDays;
-    final hasGoals = store.activeGoals.isNotEmpty;
+    final streak = store.streak;
+    final best = store.bestStreak;
+    final today = store.streakToday;
+    final days = store.streakDays;
     final hot = streak > 0;
     final now = DateTime.now();
     final String status;
     final Color statusColor;
     if (today) {
-      status = 'Hoy ya cumpliste. Tu racha está a salvo.';
+      status = 'Hoy ya completaste una tarea. Tu racha está a salvo.';
       statusColor = C.ok;
     } else if (streak > 0) {
-      status = 'Cumple una meta hoy para no perder tus $streak ${_daysWord(streak)}.';
+      status = 'Completa una tarea hoy para no perder tus $streak ${_daysWord(streak)}.';
       statusColor = C.warn;
     } else if (best > 0) {
       status = 'Tu récord es de $best ${_daysWord(best)}. Empieza otra racha hoy.';
       statusColor = C.muted;
     } else {
-      status = hasGoals ? 'Marca una meta hoy y enciende tu primera racha.' : 'Escribe una meta para empezar tu racha.';
+      status = 'Completa una tarea hoy y enciende tu primera racha.';
       statusColor = C.muted;
     }
     return Glass(
@@ -267,7 +266,7 @@ class _NextReward extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final next = store.nextReward;
-    final streak = store.goalStreak;
+    final streak = store.streak;
     if (next == null) {
       return Glass(
         child: Text('Completaste todas las constelaciones. Tu cielo está lleno. Sigue así.', style: sora(15, w: FontWeight.w500, color: const Color(0xFFFFE08A))),
@@ -516,7 +515,7 @@ class _Sky extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final best = store.bestGoalStreak;
+    final best = store.bestStreak;
     return Glass(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('TU CIELO · CONSTELACIONES GANADAS', style: label()),

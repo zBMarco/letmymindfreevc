@@ -38,13 +38,12 @@ class _ShellState extends State<Shell> {
       final q = Uri.base.queryParameters;
       tab = int.tryParse(q['tab'] ?? '') ?? 0;
       if (q['demo'] == '1' && store.tasks.isEmpty) _seedDemo();
-      // ?streak=30 fakes a goal streak of that many days ending today (to preview the flame colors).
+      // ?streak=30 fakes a streak of that many days ending today (to preview the flame colors).
       final st = int.tryParse(q['streak'] ?? '');
       if (st != null && st > 0) {
-        final g = store.activeGoals.isNotEmpty ? store.activeGoals.first : store.addGoal(title: 'Ejemplo: racha', color: 0xFFFFB86B);
         final d = DateTime.now();
         for (var i = 0; i < st; i++) {
-          g.days.add(dayKey(DateTime(d.year, d.month, d.day - i, 12).millisecondsSinceEpoch));
+          store.debugStreakDays.add(dayKey(DateTime(d.year, d.month, d.day - i, 12).millisecondsSinceEpoch));
         }
       }
       if (q['ft'] != null) fx.debugFlareT = double.tryParse(q['ft']!);
@@ -121,7 +120,14 @@ class _ShellState extends State<Shell> {
 
   void _onEvent(StarEvent e) {
     switch (e) {
-      case TaskCompleted(:final task, :final pctFreed, :final inNebula):
+      case TaskCompleted(:final task, :final pctFreed, :final inNebula, :final streak, :final unlocked):
+        if (unlocked != null) {
+          // this task reached a new constellation: that's the celebration
+          fx.flare();
+          _haptic([(0, 'light'), (200, 'medium'), (200, 'heavy'), (300, 'heavy'), (400, 'medium')]);
+          showRewardUnlock(context, unlocked);
+          return;
+        }
         if (inNebula) {
           _haptic([(0, 'medium'), (120, 'light')]);
         } else {
@@ -129,11 +135,18 @@ class _ShellState extends State<Shell> {
           _haptic([(0, 'heavy'), (90, 'heavy'), (160, 'medium'), (220, 'light')]);
         }
         final lines = celebrationLines[task.size] ?? celebrationLines[1]!;
+        final next = store.nextReward;
+        final left = next == null ? 0 : next.days - streak;
         showCelebration(
           context,
+          // first task of the day: the streak grows
+          title: streak > 0 ? (streak == 1 ? '¡Racha encendida!' : '¡$streak días de racha!') : '¡Hecho!',
+          color: streak > 0 ? fire : C.ok,
           big: inNebula ? '+1 chispa' : '−$pctFreed% carga',
           line: inNebula ? 'Tu nueva estrella se forma: ${store.star.phase == Phase.nebula ? store.star.progress : rebirthNeed}/$rebirthNeed' : lines[Random().nextInt(lines.length)],
-          small: 'Tardaste ${fmtDur(task.takenMs)}${task.activeMs > 0 ? ' enfocado' : ''} · ${store.doneToday.length} hoy${inNebula ? '' : ' · tu estrella: ${store.level.name}'}',
+          small: streak > 0 && next != null
+              ? 'Tardaste ${fmtDur(task.takenMs)} · faltan $left ${left == 1 ? 'día' : 'días'} para ${next.name}'
+              : 'Tardaste ${fmtDur(task.takenMs)}${task.activeMs > 0 ? ' enfocado' : ''} · ${store.doneToday.length} hoy${inNebula ? '' : ' · tu estrella: ${store.level.name}'}',
         );
       case Supernova():
         setState(() => tab = 1);
@@ -141,24 +154,18 @@ class _ShellState extends State<Shell> {
         _haptic([(0, 'heavy'), (60, 'heavy'), (60, 'heavy'), (120, 'heavy'), (200, 'medium'), (300, 'light'), (400, 'light')]);
         Future.delayed(const Duration(milliseconds: 700), () => stamp.value = ('¡Supernova!', false));
         Future.delayed(const Duration(milliseconds: 3400), () => stamp.value = null);
-      case GoalChecked(:final goal, :final streak, :final unlocked):
-        if (unlocked != null) {
-          fx.flare();
-          _haptic([(0, 'light'), (200, 'medium'), (200, 'heavy'), (300, 'heavy'), (400, 'medium')]);
-          showRewardUnlock(context, unlocked);
-        } else if (streak > 0) {
-          // first goal kept today: the streak grows
+      case GoalChecked(:final goal, :final firstToday):
+        if (firstToday) {
+          // first goal kept today
           fx.flare();
           _haptic([(0, 'heavy'), (110, 'medium'), (120, 'light')]);
-          final next = store.nextReward;
-          final left = next == null ? 0 : next.days - streak;
           showCelebration(
             context,
-            title: streak == 1 ? '¡Racha encendida!' : '¡$streak días!',
+            title: '¡Meta de hoy!',
             color: fire,
-            big: 'Racha de constancia: $streak',
+            big: goal.title,
             line: goalCheers[Random().nextInt(goalCheers.length)],
-            small: next == null ? goal.title : '${goal.title} · faltan $left ${left == 1 ? 'día' : 'días'} para ${next.name}',
+            small: 'Tu racha crece con cada día que completas una tarea.',
           );
         } else {
           // another goal on a day that already counted
@@ -297,7 +304,7 @@ class _Header extends StatelessWidget {
                   ),
                 ),
                 if (onStreak != null) ...[
-                  _StreakBadge(days: store.goalStreak, lit: store.goalDoneToday, onTap: onStreak!),
+                  _StreakBadge(days: store.streak, lit: store.streakToday, onTap: onStreak!),
                   const SizedBox(width: 10),
                 ],
                 Text(nebula ? '${store.star.progress}/$rebirthNeed' : '${(load * 100).round()}%', style: mono(17, w: FontWeight.w500)),
@@ -333,8 +340,8 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Your goal streak. The flame changes color as the streak grows (see [flameTiers]),
-/// glows and flickers more the longer it is, and stays dim until you keep a goal today.
+/// Your streak (days with at least one task done). The flame changes color as it grows
+/// (see [flameTiers]), glows and flickers more the longer it is, and stays dim until you finish a task today.
 class _StreakBadge extends StatefulWidget {
   final int days;
   final bool lit;

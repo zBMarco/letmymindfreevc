@@ -15,7 +15,13 @@ class TaskCompleted extends StarEvent {
   final Task task;
   final int pctFreed;
   final bool inNebula;
-  TaskCompleted(this.task, this.pctFreed, this.inNebula);
+
+  /// The new streak when this is the first task done today, otherwise -1.
+  final int streak;
+
+  /// Set when this completion reached a constellation for the first time.
+  final Reward? unlocked;
+  TaskCompleted(this.task, this.pctFreed, this.inNebula, {this.streak = -1, this.unlocked});
 }
 
 class Supernova extends StarEvent {}
@@ -24,11 +30,10 @@ class Rebirth extends StarEvent {}
 
 class GoalChecked extends StarEvent {
   final Goal goal;
-  final int streak;
 
-  /// Set when this check-in reached a constellation for the first time.
-  final Reward? unlocked;
-  GoalChecked(this.goal, this.streak, this.unlocked);
+  /// True when this is the first goal kept today.
+  final bool firstToday;
+  GoalChecked(this.goal, this.firstToday);
 }
 
 class GoalAchieved extends StarEvent {
@@ -201,7 +206,30 @@ class AppStore extends ChangeNotifier {
 
   List<Task> get doneToday => done.where((t) => dayKey(t.completedAt!) == dayKey(nowMs())).toList();
 
-  int get streak => streakOf(done.map((t) => dayKey(t.completedAt!)).toSet());
+  /* ---------- streak ---------- */
+  /// Fake streak days for the ?streak= preview (web only, never saved).
+  final Set<String> debugStreakDays = {};
+
+  /// Every day where you completed at least one task. This is what the streak counts.
+  Set<String> get streakDays => {for (final t in done) dayKey(t.completedAt!), ...debugStreakDays};
+  int get streak => streakOf(streakDays);
+  int get bestStreak => bestStreakOf(streakDays);
+  bool get streakToday => streakDays.contains(dayKey(nowMs()));
+
+  /// Constellations earned (by your best streak ever, so they're never lost).
+  List<Reward> get unlockedRewards {
+    final best = bestStreak;
+    return rewards.where((r) => r.days <= best).toList();
+  }
+
+  /// The constellation your current streak is drawing (null after a full year).
+  Reward? get nextReward {
+    final cur = streak;
+    for (final r in rewards) {
+      if (r.days > cur) return r;
+    }
+    return null;
+  }
 
   double catLoad(String id) => tasks.values.where((t) => t.catId == id).fold<double>(0, (a, t) => a + t.load);
 
@@ -283,6 +311,8 @@ class AppStore extends ChangeNotifier {
     final t = tasks[id];
     if (t == null || t.completedAt != null) return;
     final freed = pctOf(t.load);
+    final firstToday = !streakToday;
+    final bestBefore = bestStreak;
     final n = nowMs();
     if (t.runningSince != null) t.activeMs += n - t.runningSince!;
     t.runningSince = null;
@@ -310,7 +340,12 @@ class AppStore extends ChangeNotifier {
       }
     }
     _commit();
-    _events.add(TaskCompleted(t, max(1, freed), inNebula));
+    final st = streak;
+    Reward? unlocked;
+    for (final r in rewards) {
+      if (r.days > bestBefore && r.days <= st) unlocked = r;
+    }
+    _events.add(TaskCompleted(t, max(1, freed), inNebula, streak: firstToday ? st : -1, unlocked: unlocked));
     if (reborn) _events.add(Rebirth());
     checkStar();
   }
@@ -418,30 +453,12 @@ class AppStore extends ChangeNotifier {
     _save();
   }
 
-  /* ---------- goals & streak ---------- */
+  /* ---------- goals ---------- */
   List<Goal> get activeGoals => goals.values.where((g) => g.active).toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
   List<Goal> get achievedGoals => goals.values.where((g) => !g.active).toList()..sort((a, b) => b.achievedAt!.compareTo(a.achievedAt!));
 
-  /// Every day where you kept at least one goal.
-  Set<String> get goalDays => {for (final g in goals.values) ...g.days};
-  int get goalStreak => streakOf(goalDays);
-  int get bestGoalStreak => bestStreakOf(goalDays);
-  bool get goalDoneToday => goalDays.contains(dayKey(nowMs()));
-
-  /// Constellations earned (by your best streak ever, so they're never lost).
-  List<Reward> get unlockedRewards {
-    final best = bestGoalStreak;
-    return rewards.where((r) => r.days <= best).toList();
-  }
-
-  /// The constellation your current streak is drawing (null after a full year).
-  Reward? get nextReward {
-    final cur = goalStreak;
-    for (final r in rewards) {
-      if (r.days > cur) return r;
-    }
-    return null;
-  }
+  /// True when you already kept at least one goal today (drives the dot on the Goals tab).
+  bool get goalDoneToday => goals.values.any((g) => g.days.contains(dayKey(nowMs())));
 
   Goal addGoal({required String title, String why = '', required int color, int? target}) {
     final g = Goal(id: newId('g'), title: title, why: why, color: color, target: target, createdAt: nowMs());
@@ -471,15 +488,9 @@ class AppStore extends ChangeNotifier {
       return false;
     }
     final firstToday = !goalDoneToday;
-    final bestBefore = bestGoalStreak;
     g.days.add(today);
     _commit();
-    final streak = goalStreak;
-    Reward? unlocked;
-    for (final r in rewards) {
-      if (r.days > bestBefore && r.days <= streak) unlocked = r;
-    }
-    _events.add(GoalChecked(g, firstToday ? streak : -1, unlocked));
+    _events.add(GoalChecked(g, firstToday));
     return true;
   }
 
