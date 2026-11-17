@@ -38,6 +38,15 @@ class _ShellState extends State<Shell> {
       final q = Uri.base.queryParameters;
       tab = int.tryParse(q['tab'] ?? '') ?? 0;
       if (q['demo'] == '1' && store.tasks.isEmpty) _seedDemo();
+      // ?streak=30 fakes a goal streak of that many days ending today (to preview the flame colors).
+      final st = int.tryParse(q['streak'] ?? '');
+      if (st != null && st > 0) {
+        final g = store.activeGoals.isNotEmpty ? store.activeGoals.first : store.addGoal(title: 'Ejemplo: racha', color: 0xFFFFB86B);
+        final d = DateTime.now();
+        for (var i = 0; i < st; i++) {
+          g.days.add(dayKey(DateTime(d.year, d.month, d.day - i, 12).millisecondsSinceEpoch));
+        }
+      }
       if (q['ft'] != null) fx.debugFlareT = double.tryParse(q['ft']!);
       final rw = int.tryParse(q['reward'] ?? '');
       if (rw != null && rw >= 0 && rw < rewards.length) {
@@ -210,7 +219,7 @@ class _ShellState extends State<Shell> {
               child: Column(children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: _Header(store: store, onTap: () => setState(() => tab = 1)),
+                  child: _Header(store: store, onTap: () => setState(() => tab = 1), onStreak: tab == 0 ? () => setState(() => tab = 2) : null),
                 ),
                 Expanded(
                   child: AnimatedSwitcher(
@@ -250,7 +259,10 @@ class _ShellState extends State<Shell> {
 class _Header extends StatelessWidget {
   final AppStore store;
   final VoidCallback onTap;
-  const _Header({required this.store, required this.onTap});
+
+  /// Shows the streak badge (on the Tasks tab) and opens Goals when tapped.
+  final VoidCallback? onStreak;
+  const _Header({required this.store, required this.onTap, this.onStreak});
 
   @override
   Widget build(BuildContext context) {
@@ -284,6 +296,10 @@ class _Header extends StatelessWidget {
                     child: Text(lvl.name),
                   ),
                 ),
+                if (onStreak != null) ...[
+                  _StreakBadge(days: store.goalStreak, lit: store.goalDoneToday, onTap: onStreak!),
+                  const SizedBox(width: 10),
+                ],
                 Text(nebula ? '${store.star.progress}/$rebirthNeed' : '${(load * 100).round()}%', style: mono(17, w: FontWeight.w500)),
               ]),
               const SizedBox(height: 7),
@@ -312,6 +328,112 @@ class _Header extends StatelessWidget {
             ]),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+/// Your goal streak. The flame changes color as the streak grows (see [flameTiers]),
+/// glows and flickers more the longer it is, and stays dim until you keep a goal today.
+class _StreakBadge extends StatefulWidget {
+  final int days;
+  final bool lit;
+  final VoidCallback onTap;
+  const _StreakBadge({required this.days, required this.lit, required this.onTap});
+  @override
+  State<_StreakBadge> createState() => _StreakBadgeState();
+}
+
+class _StreakBadgeState extends State<_StreakBadge> with SingleTickerProviderStateMixin {
+  late final AnimationController _flicker = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+
+  int get _tier => flameTierOf(widget.days);
+  bool get _alive => widget.lit && _tier >= 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncAnim();
+  }
+
+  @override
+  void didUpdateWidget(_StreakBadge old) {
+    super.didUpdateWidget(old);
+    _syncAnim();
+  }
+
+  void _syncAnim() {
+    if (_alive && !_flicker.isAnimating) {
+      _flicker.repeat();
+    } else if (!_alive && _flicker.isAnimating) {
+      _flicker.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _flicker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final i = _tier;
+    final t = flameTiers[i];
+    final lit = widget.lit;
+    final dim = lit ? 1.0 : .5;
+    final base = Color(t.base).withValues(alpha: dim);
+    final tip = Color(t.tip).withValues(alpha: dim);
+    final heat = i / (flameTiers.length - 1); // 0..1, how strong the glow and flicker are
+    final days = widget.days;
+    return Semantics(
+      button: true,
+      label: 'Racha de constancia: $days ${days == 1 ? 'día' : 'días'}, ${t.name}${lit ? '' : ', aún no cumples hoy'}',
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedBuilder(
+          animation: _flicker,
+          builder: (context, _) {
+            final a = _flicker.value * 2 * pi;
+            // two mixed waves read as a real flicker instead of a steady pulse
+            final f = _alive ? (sin(a) * .6 + sin(a * 3 + 1.3) * .4) : 0.0;
+            final glow = lit && i > 0 ? (.25 + .45 * heat) * (1 + .25 * f) : 0.0;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 500),
+              padding: const EdgeInsets.fromLTRB(6, 3, 9, 3),
+              decoration: BoxDecoration(
+                gradient: lit && i > 0 ? LinearGradient(colors: [base.withValues(alpha: .10 + .12 * heat), tip.withValues(alpha: .06)]) : null,
+                color: lit && i > 0 ? null : Colors.white.withValues(alpha: .05),
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(color: lit && i > 0 ? tip.withValues(alpha: .55) : C.line),
+                boxShadow: glow > 0 ? [BoxShadow(color: base.withValues(alpha: glow.clamp(0, 1)), blurRadius: 10 + 14 * heat)] : null,
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Transform.scale(
+                  scale: 1 + (.05 + .07 * heat) * f,
+                  alignment: Alignment.bottomCenter,
+                  child: ShaderMask(
+                    blendMode: BlendMode.srcIn,
+                    shaderCallback: (r) => LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [base, tip],
+                    ).createShader(r),
+                    child: Icon(
+                      Icons.local_fire_department_rounded,
+                      size: 18,
+                      color: Colors.white,
+                      shadows: glow > 0 ? [Shadow(color: tip, blurRadius: 6 + 8 * heat)] : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Text('$days', style: mono(14, w: FontWeight.w600, color: lit && i > 0 ? Color.lerp(tip, Colors.white, .15)! : C.muted)),
+              ]),
+            );
+          },
+        ),
       ),
     );
   }

@@ -70,4 +70,18 @@ void main() {
     expect(r.doneToday, isTrue);
     expect(again.goalStreak, 1);
   });
+
+  test('el fuego de la racha sube de color con los días', () {
+    String name(int d) => flameTiers[flameTierOf(d)].name;
+    expect(name(0), 'Apagado');
+    expect(name(1), 'Brasa');
+    expect(name(2), 'Brasa');
+    expect(name(3), 'Fuego naranja');
+    expect(name(7), 'Fuego amarillo');
+    expect(name(14), 'Fuego blanco');
+    expect(name(29), 'Fuego blanco');
+    expect(name(30), 'Fuego azul');
+    expect(name(100), 'Fuego violeta');
+    expect(name(400), 'Fuego estelar');
+  });
 }

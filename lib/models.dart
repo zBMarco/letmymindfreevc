@@ -366,6 +366,36 @@ const rewards = [
       [(.5, .08), (.5, .35), (.15, .2), (.85, .2), (.05, .5), (.95, .5), (.5, .62), (.35, .92), (.65, .92)], [(0, 1), (1, 2), (1, 3), (2, 4), (3, 5), (1, 6), (6, 7), (6, 8)]),
 ];
 
+/// The streak flame heats up like a star: red embers, then orange, yellow, white,
+/// blue and finally violet, the hottest.
+class FlameTier {
+  final int from;
+  final String name;
+  final int base; // bottom of the flame
+  final int tip; // top of the flame
+  const FlameTier(this.from, this.name, this.base, this.tip);
+}
+
+const flameTiers = [
+  FlameTier(0, 'Apagado', 0xFF6F75A0, 0xFF6F75A0),
+  FlameTier(1, 'Brasa', 0xFFE8452C, 0xFFFF8A5C),
+  FlameTier(3, 'Fuego naranja', 0xFFFF6A1F, 0xFFFFB86B),
+  FlameTier(7, 'Fuego amarillo', 0xFFFF9A1F, 0xFFFFE66B),
+  FlameTier(14, 'Fuego blanco', 0xFFFFC46B, 0xFFFFFBEA),
+  FlameTier(30, 'Fuego azul', 0xFF2F7BFF, 0xFF9EE6FF),
+  FlameTier(100, 'Fuego violeta', 0xFF7A3CFF, 0xFFE0B0FF),
+  FlameTier(365, 'Fuego estelar', 0xFFFF4FD8, 0xFF7CF0FF),
+];
+
+/// Index in [flameTiers] for a streak of [days].
+int flameTierOf(int days) {
+  var i = 0;
+  while (i + 1 < flameTiers.length && days >= flameTiers[i + 1].from) {
+    i++;
+  }
+  return i;
+}
+
 const goalCheers = [
   'Un día más. Así se construye.',
   'Constancia > motivación.',
