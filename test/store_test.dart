@@ -79,12 +79,13 @@ void main() {
     expect(store.tasks.values.where((x) => x.completedAt == null).length, 1);
   });
 
-  test('la racha de tareas cuenta días seguidos', () {
+  test('la racha suma una por tarea en días seguidos', () {
     final a = store.addTask(title: 'a');
     store.complete(a.id);
     expect(store.streak, 1);
     final b = store.addTask(title: 'b');
     store.complete(b.id);
+    expect(store.streak, 2);
     store.tasks[b.id]!.completedAt = DateTime.now().subtract(const Duration(days: 1)).millisecondsSinceEpoch;
     expect(store.streak, 2);
   });

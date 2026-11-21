@@ -265,7 +265,7 @@ class StatsPage extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Aquí verás todo lo que soltaste.', style: sora(21, w: FontWeight.w600)),
             const SizedBox(height: 10),
-            Text('Cuánta carga le quitaste a tu estrella, cuánto tardaste en cada cosa, tu racha de días y la historia completa. Completa tu primera tarea para empezar.',
+            Text('Cuánta carga le quitaste a tu estrella, cuánto tardaste en cada cosa, tu racha y la historia completa. Completa tu primera tarea para empezar.',
                 style: sora(15, color: C.muted, height: 1.45)),
             const SizedBox(height: 16),
             Pill('Ir a mis tareas', primary: true, onTap: onGoTasks),
@@ -333,7 +333,7 @@ class StatsPage extends StatelessWidget {
     return ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, _bottomPad), children: [
       Text('Tu progreso', style: sora(28, w: FontWeight.w600, ls: -.5)),
       const SizedBox(height: 14),
-      _Tiles([('${done.length}', 'tareas hechas', C.ok), ('$freed%', 'carga soltada', Theme.of(context).colorScheme.primary), ('${store.streak}', store.streak == 1 ? 'día de racha' : 'días de racha', C.sky)]),
+      _Tiles([('${done.length}', 'tareas hechas', C.ok), ('$freed%', 'carga soltada', Theme.of(context).colorScheme.primary), ('${store.streak}', store.streak == 1 ? 'tarea de racha' : 'tareas de racha', C.sky)]),
       const SizedBox(height: 14),
       Glass(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -16,12 +16,12 @@ class TaskCompleted extends StarEvent {
   final int pctFreed;
   final bool inNebula;
 
-  /// The new streak when this is the first task done today, otherwise -1.
+  /// The streak right after this task (every completed task adds one).
   final int streak;
 
   /// Set when this completion reached a constellation for the first time.
   final Reward? unlocked;
-  TaskCompleted(this.task, this.pctFreed, this.inNebula, {this.streak = -1, this.unlocked});
+  TaskCompleted(this.task, this.pctFreed, this.inNebula, {this.streak = 0, this.unlocked});
 }
 
 class Supernova extends StarEvent {}
@@ -207,26 +207,36 @@ class AppStore extends ChangeNotifier {
   List<Task> get doneToday => done.where((t) => dayKey(t.completedAt!) == dayKey(nowMs())).toList();
 
   /* ---------- streak ---------- */
-  /// Fake streak days for the ?streak= preview (web only, never saved).
-  final Set<String> debugStreakDays = {};
+  /// Fake tasks done today for the ?streak= preview (web only, never saved).
+  int debugStreakTasks = 0;
 
-  /// Every day where you completed at least one task. This is what the streak counts.
-  Set<String> get streakDays => {for (final t in done) dayKey(t.completedAt!), ...debugStreakDays};
+  /// Tasks completed on each day (by dayKey). The streak adds them up while the days are consecutive.
+  Map<String, int> get streakDays {
+    final m = <String, int>{};
+    for (final t in done) {
+      final k = dayKey(t.completedAt!);
+      m[k] = (m[k] ?? 0) + 1;
+    }
+    if (debugStreakTasks > 0) m.update(dayKey(nowMs()), (v) => v + debugStreakTasks, ifAbsent: () => debugStreakTasks);
+    return m;
+  }
+
+  /// One point per completed task; it resets when a whole day goes by without one.
   int get streak => streakOf(streakDays);
   int get bestStreak => bestStreakOf(streakDays);
-  bool get streakToday => streakDays.contains(dayKey(nowMs()));
+  bool get streakToday => streakDays.containsKey(dayKey(nowMs()));
 
   /// Constellations earned (by your best streak ever, so they're never lost).
   List<Reward> get unlockedRewards {
     final best = bestStreak;
-    return rewards.where((r) => r.days <= best).toList();
+    return rewards.where((r) => r.tasks <= best).toList();
   }
 
-  /// The constellation your current streak is drawing (null after a full year).
+  /// The constellation your current streak is drawing (null once you have them all).
   Reward? get nextReward {
     final cur = streak;
     for (final r in rewards) {
-      if (r.days > cur) return r;
+      if (r.tasks > cur) return r;
     }
     return null;
   }
@@ -311,7 +321,6 @@ class AppStore extends ChangeNotifier {
     final t = tasks[id];
     if (t == null || t.completedAt != null) return;
     final freed = pctOf(t.load);
-    final firstToday = !streakToday;
     final bestBefore = bestStreak;
     final n = nowMs();
     if (t.runningSince != null) t.activeMs += n - t.runningSince!;
@@ -343,9 +352,9 @@ class AppStore extends ChangeNotifier {
     final st = streak;
     Reward? unlocked;
     for (final r in rewards) {
-      if (r.days > bestBefore && r.days <= st) unlocked = r;
+      if (r.tasks > bestBefore && r.tasks <= st) unlocked = r;
     }
-    _events.add(TaskCompleted(t, max(1, freed), inNebula, streak: firstToday ? st : -1, unlocked: unlocked));
+    _events.add(TaskCompleted(t, max(1, freed), inNebula, streak: st, unlocked: unlocked));
     if (reborn) _events.add(Rebirth());
     checkStar();
   }

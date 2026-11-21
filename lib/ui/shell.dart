@@ -38,14 +38,9 @@ class _ShellState extends State<Shell> {
       final q = Uri.base.queryParameters;
       tab = int.tryParse(q['tab'] ?? '') ?? 0;
       if (q['demo'] == '1' && store.tasks.isEmpty) _seedDemo();
-      // ?streak=30 fakes a streak of that many days ending today (to preview the flame colors).
+      // ?streak=30 fakes that many tasks done today (to preview the flame colors).
       final st = int.tryParse(q['streak'] ?? '');
-      if (st != null && st > 0) {
-        final d = DateTime.now();
-        for (var i = 0; i < st; i++) {
-          store.debugStreakDays.add(dayKey(DateTime(d.year, d.month, d.day - i, 12).millisecondsSinceEpoch));
-        }
-      }
+      if (st != null && st > 0) store.debugStreakTasks = st;
       if (q['ft'] != null) fx.debugFlareT = double.tryParse(q['ft']!);
       final rw = int.tryParse(q['reward'] ?? '');
       if (rw != null && rw >= 0 && rw < rewards.length) {
@@ -136,16 +131,16 @@ class _ShellState extends State<Shell> {
         }
         final lines = celebrationLines[task.size] ?? celebrationLines[1]!;
         final next = store.nextReward;
-        final left = next == null ? 0 : next.days - streak;
+        final left = next == null ? 0 : next.tasks - streak;
         showCelebration(
           context,
-          // first task of the day: the streak grows
-          title: streak > 0 ? (streak == 1 ? '¡Racha encendida!' : '¡$streak días de racha!') : '¡Hecho!',
-          color: streak > 0 ? fire : C.ok,
+          // every task adds one to the streak
+          title: streak == 1 ? '¡Racha encendida!' : '¡Racha de $streak!',
+          color: fire,
           big: inNebula ? '+1 chispa' : '−$pctFreed% carga',
           line: inNebula ? 'Tu nueva estrella se forma: ${store.star.phase == Phase.nebula ? store.star.progress : rebirthNeed}/$rebirthNeed' : lines[Random().nextInt(lines.length)],
-          small: streak > 0 && next != null
-              ? 'Tardaste ${fmtDur(task.takenMs)} · faltan $left ${left == 1 ? 'día' : 'días'} para ${next.name}'
+          small: next != null
+              ? 'Tardaste ${fmtDur(task.takenMs)} · ${left == 1 ? 'falta 1 tarea' : 'faltan $left tareas'} para ${next.name}'
               : 'Tardaste ${fmtDur(task.takenMs)}${task.activeMs > 0 ? ' enfocado' : ''} · ${store.doneToday.length} hoy${inNebula ? '' : ' · tu estrella: ${store.level.name}'}',
         );
       case Supernova():
@@ -165,7 +160,7 @@ class _ShellState extends State<Shell> {
             color: fire,
             big: goal.title,
             line: goalCheers[Random().nextInt(goalCheers.length)],
-            small: 'Tu racha crece con cada día que completas una tarea.',
+            small: 'Tu racha suma uno por cada tarea que completas.',
           );
         } else {
           // another goal on a day that already counted
@@ -304,7 +299,7 @@ class _Header extends StatelessWidget {
                   ),
                 ),
                 if (onStreak != null) ...[
-                  _StreakBadge(days: store.streak, lit: store.streakToday, onTap: onStreak!),
+                  _StreakBadge(count: store.streak, lit: store.streakToday, onTap: onStreak!),
                   const SizedBox(width: 10),
                 ],
                 Text(nebula ? '${store.star.progress}/$rebirthNeed' : '${(load * 100).round()}%', style: mono(17, w: FontWeight.w500)),
@@ -340,13 +335,13 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Your streak (days with at least one task done). The flame changes color as it grows
+/// Your streak (one per task done, while you keep finishing at least one a day). The flame changes color as it grows
 /// (see [flameTiers]), glows and flickers more the longer it is, and stays dim until you finish a task today.
 class _StreakBadge extends StatefulWidget {
-  final int days;
+  final int count;
   final bool lit;
   final VoidCallback onTap;
-  const _StreakBadge({required this.days, required this.lit, required this.onTap});
+  const _StreakBadge({required this.count, required this.lit, required this.onTap});
   @override
   State<_StreakBadge> createState() => _StreakBadgeState();
 }
@@ -354,7 +349,7 @@ class _StreakBadge extends StatefulWidget {
 class _StreakBadgeState extends State<_StreakBadge> with SingleTickerProviderStateMixin {
   late final AnimationController _flicker = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
 
-  int get _tier => flameTierOf(widget.days);
+  int get _tier => flameTierOf(widget.count);
   bool get _alive => widget.lit && _tier >= 1;
 
   @override
@@ -392,10 +387,10 @@ class _StreakBadgeState extends State<_StreakBadge> with SingleTickerProviderSta
     final base = Color(t.base).withValues(alpha: dim);
     final tip = Color(t.tip).withValues(alpha: dim);
     final heat = i / (flameTiers.length - 1); // 0..1, how strong the glow and flicker are
-    final days = widget.days;
+    final count = widget.count;
     return Semantics(
       button: true,
-      label: 'Racha de constancia: $days ${days == 1 ? 'día' : 'días'}, ${t.name}${lit ? '' : ', aún no cumples hoy'}',
+      label: 'Racha: $count ${count == 1 ? 'tarea' : 'tareas'}, ${t.name}${lit ? '' : ', aún no completas una tarea hoy'}',
       child: GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
@@ -436,7 +431,7 @@ class _StreakBadgeState extends State<_StreakBadge> with SingleTickerProviderSta
                   ),
                 ),
                 const SizedBox(width: 3),
-                Text('$days', style: mono(14, w: FontWeight.w600, color: lit && i > 0 ? Color.lerp(tip, Colors.white, .15)! : C.muted)),
+                Text('$count', style: mono(14, w: FontWeight.w600, color: lit && i > 0 ? Color.lerp(tip, Colors.white, .15)! : C.muted)),
               ]),
             );
           },

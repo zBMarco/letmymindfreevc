@@ -299,70 +299,76 @@ class Goal {
       );
 }
 
-/// Consecutive days in [days] ending today, or yesterday if today isn't marked yet
-/// (the streak is still alive until the day ends).
-int streakOf(Set<String> days, [DateTime? now]) {
+/// Your streak: every task you completed in the current run of consecutive days,
+/// ending today, or yesterday if you haven't finished one today yet (the streak is
+/// still alive until the day ends). [perDay] maps dayKey() to tasks done that day.
+int streakOf(Map<String, int> perDay, [DateTime? now]) {
+  int on(DateTime d) => perDay[dayKey(d.millisecondsSinceEpoch)] ?? 0;
   var d = now ?? DateTime.now();
-  if (!days.contains(dayKey(d.millisecondsSinceEpoch))) d = DateTime(d.year, d.month, d.day - 1, 12);
+  if (on(d) == 0) d = DateTime(d.year, d.month, d.day - 1, 12);
   var n = 0;
-  while (days.contains(dayKey(d.millisecondsSinceEpoch))) {
-    n++;
+  while (on(d) > 0) {
+    n += on(d);
     d = DateTime(d.year, d.month, d.day - 1, 12);
   }
   return n;
 }
 
-/// Longest run of consecutive days ever.
-int bestStreakOf(Set<String> days) {
-  if (days.isEmpty) return 0;
-  final dates = days.map((k) {
+/// The most tasks you ever completed in one run of consecutive days.
+int bestStreakOf(Map<String, int> perDay) {
+  DateTime parse(String k) {
     final p = k.split('-').map(int.parse).toList();
     return DateTime(p[0], p[1], p[2], 12);
-  }).toList()
-    ..sort();
-  var best = 1, run = 1;
-  for (var i = 1; i < dates.length; i++) {
-    final prev = dates[i - 1];
-    final next = DateTime(prev.year, prev.month, prev.day + 1, 12);
-    run = (dates[i].year == next.year && dates[i].month == next.month && dates[i].day == next.day) ? run + 1 : 1;
+  }
+
+  final dates = [
+    for (final e in perDay.entries)
+      if (e.value > 0) (parse(e.key), e.value),
+  ]..sort((a, b) => a.$1.compareTo(b.$1));
+  var best = 0, run = 0;
+  for (var i = 0; i < dates.length; i++) {
+    final prev = i == 0 ? null : dates[i - 1].$1;
+    final next = prev == null ? null : DateTime(prev.year, prev.month, prev.day + 1, 12);
+    final follows = next != null && dates[i].$1.year == next.year && dates[i].$1.month == next.month && dates[i].$1.day == next.day;
+    run = (follows ? run : 0) + dates[i].$2;
     best = max(best, run);
   }
   return best;
 }
 
-/// A constellation you earn by keeping your streak. Points live in a 0..1 square.
+/// A constellation you earn when your streak reaches [tasks]. Points live in a 0..1 square.
 class Reward {
-  final int days;
+  final int tasks;
   final String name;
   final String line;
   final int color;
   final List<(double, double)> pts;
   final List<(int, int)> edges;
-  const Reward(this.days, this.name, this.line, this.color, this.pts, this.edges);
+  const Reward(this.tasks, this.name, this.line, this.color, this.pts, this.edges);
 }
 
 const rewards = [
-  Reward(3, 'Triángulo', 'Tres días seguidos. Ya empezaste a dibujar tu cielo.', 0xFF9CC2FF,
+  Reward(3, 'Triángulo', 'Tres tareas de racha. Ya empezaste a dibujar tu cielo.', 0xFF9CC2FF,
       [(.2, .75), (.8, .62), (.45, .2)], [(0, 1), (1, 2), (2, 0)]),
-  Reward(7, 'Casiopea', 'Una semana completa. Eso ya es constancia.', 0xFFFFD58A,
+  Reward(7, 'Casiopea', 'Siete tareas sin soltar la racha. Eso ya es constancia.', 0xFFFFD58A,
       [(.08, .35), (.3, .7), (.5, .42), (.7, .75), (.92, .3)], [(0, 1), (1, 2), (2, 3), (3, 4)]),
-  Reward(14, 'Lira', 'Dos semanas. Tu disciplina ya suena.', 0xFF8EF0B8,
+  Reward(14, 'Lira', 'Catorce tareas. Tu disciplina ya suena.', 0xFF8EF0B8,
       [(.5, .1), (.4, .38), (.62, .42), (.33, .85), (.58, .9)], [(0, 1), (0, 2), (1, 2), (1, 3), (2, 4), (3, 4)]),
-  Reward(21, 'Cisne', 'Tres semanas: dicen que así nace un hábito.', 0xFFC3A6FF,
+  Reward(21, 'Cisne', 'Veintiuna tareas: así nace un hábito.', 0xFFC3A6FF,
       [(.5, .08), (.5, .4), (.5, .7), (.5, .95), (.12, .3), (.88, .48)], [(0, 1), (1, 2), (2, 3), (4, 1), (1, 5)]),
-  Reward(30, 'Osa Menor', 'Un mes entero. Ya tienes tu propia estrella polar.', 0xFF7CC8FF,
+  Reward(30, 'Osa Menor', 'Treinta tareas. Ya tienes tu propia estrella polar.', 0xFF7CC8FF,
       [(.1, .2), (.28, .3), (.42, .42), (.55, .55), (.6, .82), (.88, .85), (.85, .58)], [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 3)]),
-  Reward(50, 'Osa Mayor', 'Cincuenta días. Esto ya es parte de ti.', 0xFFFF8FC8,
+  Reward(50, 'Osa Mayor', 'Cincuenta tareas. Esto ya es parte de ti.', 0xFFFF8FC8,
       [(.05, .3), (.22, .35), (.38, .42), (.52, .52), (.55, .82), (.9, .85), (.92, .55)], [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 3)]),
-  Reward(75, 'León', 'Setenta y cinco días con el corazón de un león.', 0xFFFFB86B,
+  Reward(75, 'León', 'Setenta y cinco tareas con el corazón de un león.', 0xFFFFB86B,
       [(.18, .3), (.25, .12), (.4, .1), (.35, .45), (.3, .7), (.62, .6), (.92, .78), (.75, .42)], [(0, 1), (1, 2), (0, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 3)]),
-  Reward(100, 'Orión', 'Cien días. Eres el cazador de tus metas.', 0xFFFF7A6B,
+  Reward(100, 'Orión', 'Cien tareas. Eres el cazador de tus metas.', 0xFFFF7A6B,
       [(.28, .1), (.72, .15), (.42, .5), (.5, .48), (.58, .46), (.25, .9), (.75, .88), (.5, .05)], [(0, 2), (1, 4), (2, 3), (3, 4), (2, 5), (4, 6), (0, 7), (7, 1)]),
-  Reward(150, 'Escorpión', 'Ciento cincuenta días. Nada te detiene.', 0xFFFF6BD5,
+  Reward(150, 'Escorpión', 'Ciento cincuenta tareas. Nada te detiene.', 0xFFFF6BD5,
       [(.88, .1), (.8, .25), (.68, .35), (.55, .45), (.45, .6), (.4, .78), (.25, .9), (.1, .82), (.12, .65)], [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8)]),
-  Reward(200, 'Andrómeda', 'Doscientos días. Tu cielo ya tiene galaxias.', 0xFFB79CFF,
+  Reward(200, 'Andrómeda', 'Doscientas tareas. Tu cielo ya tiene galaxias.', 0xFFB79CFF,
       [(.05, .7), (.3, .6), (.55, .48), (.82, .35), (.45, .25), (.62, .75), (.7, .1)], [(0, 1), (1, 2), (2, 3), (2, 4), (4, 6), (1, 5)]),
-  Reward(365, 'Fénix', 'Un año entero. Renaciste con tus metas.', 0xFFFFE08A,
+  Reward(365, 'Fénix', 'Trescientas sesenta y cinco tareas. Renaciste con tus metas.', 0xFFFFE08A,
       [(.5, .08), (.5, .35), (.15, .2), (.85, .2), (.05, .5), (.95, .5), (.5, .62), (.35, .92), (.65, .92)], [(0, 1), (1, 2), (1, 3), (2, 4), (3, 5), (1, 6), (6, 7), (6, 8)]),
 ];
 
@@ -387,10 +393,10 @@ const flameTiers = [
   FlameTier(365, 'Fuego estelar', 0xFFFF4FD8, 0xFF7CF0FF),
 ];
 
-/// Index in [flameTiers] for a streak of [days].
-int flameTierOf(int days) {
+/// Index in [flameTiers] for a streak of [n] tasks.
+int flameTierOf(int n) {
   var i = 0;
-  while (i + 1 < flameTiers.length && days >= flameTiers[i + 1].from) {
+  while (i + 1 < flameTiers.length && n >= flameTiers[i + 1].from) {
     i++;
   }
   return i;

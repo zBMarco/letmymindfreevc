@@ -182,7 +182,7 @@ class SkyBackground extends StatefulWidget {
   final Color tint;
   final bool nebula;
 
-  /// Constellations earned with the goal streak, drawn faintly in the sky.
+  /// Constellations earned with the task streak, drawn faintly in the sky.
   final List<Reward> constellations;
   const SkyBackground({super.key, required this.tint, required this.nebula, this.constellations = const []});
   @override

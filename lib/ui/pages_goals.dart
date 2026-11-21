@@ -15,6 +15,7 @@ const fire = Color(0xFFFFB86B);
 const _wd = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
 String _daysWord(int n) => n == 1 ? 'día' : 'días';
+String _tasksWord(int n) => n == 1 ? 'tarea' : 'tareas';
 
 class GoalsPage extends StatefulWidget {
   final AppStore store;
@@ -51,7 +52,7 @@ class _GoalsPageState extends State<GoalsPage> {
     final achieved = store.achievedGoals;
     final children = <Widget>[
       Text('Mis metas', style: sora(28, w: FontWeight.w600, ls: -.5)),
-      Text('Lo que quieres lograr, siempre a la vista. Tu racha crece cada día que completas al menos una tarea.', style: sora(14, color: C.faint, height: 1.45)),
+      Text('Lo que quieres lograr, siempre a la vista. Tu racha suma uno por cada tarea que completas.', style: sora(14, color: C.faint, height: 1.45)),
       _StreakHero(store: store),
       _NextReward(store: store),
       if (active.isEmpty)
@@ -60,7 +61,7 @@ class _GoalsPageState extends State<GoalsPage> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(achieved.isEmpty ? '¿Qué quieres lograr?' : 'Todas tus metas están cumplidas.', style: sora(21, w: FontWeight.w600, height: 1.2)),
             const SizedBox(height: 10),
-            Text('Escribe tus metas y para qué las quieres. Cada día que avances en una, márcala: así nunca se te olvidan. Y cada día que completas una tarea, tu racha dibuja constelaciones en tu cielo.',
+            Text('Escribe tus metas y para qué las quieres. Cada día que avances en una, márcala: así nunca se te olvidan. Y cada tarea que completas suma a tu racha y dibuja constelaciones en tu cielo.',
                 style: sora(15, color: C.muted, height: 1.45)),
             const SizedBox(height: 16),
             Pill(achieved.isEmpty ? 'Escribir mi primera meta' : 'Nueva meta', primary: true, onTap: widget.onAdd),
@@ -144,16 +145,17 @@ class _StreakHero extends StatelessWidget {
     final String status;
     final Color statusColor;
     if (today) {
-      status = 'Hoy ya completaste una tarea. Tu racha está a salvo.';
+      final n = days[dayKey(nowMs())] ?? 0;
+      status = 'Hoy llevas $n ${_tasksWord(n)}. Cada una más suma a tu racha.';
       statusColor = C.ok;
     } else if (streak > 0) {
-      status = 'Completa una tarea hoy para no perder tus $streak ${_daysWord(streak)}.';
+      status = 'Completa una tarea hoy para no perder tu racha de $streak ${_tasksWord(streak)}.';
       statusColor = C.warn;
     } else if (best > 0) {
-      status = 'Tu récord es de $best ${_daysWord(best)}. Empieza otra racha hoy.';
+      status = 'Tu récord es de $best ${_tasksWord(best)}. Empieza otra racha hoy.';
       statusColor = C.muted;
     } else {
-      status = 'Completa una tarea hoy y enciende tu primera racha.';
+      status = 'Completa una tarea y enciende tu primera racha. Cada tarea suma uno; si pasa un día sin ninguna, vuelve a cero.';
       statusColor = C.muted;
     }
     return Glass(
@@ -173,7 +175,7 @@ class _StreakHero extends StatelessWidget {
                     style: mono(46, w: FontWeight.w600, color: hot ? fire : C.faint).copyWith(height: 1, shadows: hot ? [Shadow(color: fire.withValues(alpha: .7), blurRadius: 24)] : null)),
               ),
               const SizedBox(height: 4),
-              Text('${_daysWord(streak)} de racha'.toUpperCase(), style: sora(11, w: FontWeight.w600, color: C.muted, ls: 1.2)),
+              Text('${_tasksWord(streak)} de racha'.toUpperCase(), style: sora(11, w: FontWeight.w600, color: C.muted, ls: 1.2)),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -193,7 +195,8 @@ class _StreakHero extends StatelessWidget {
                 final d = DateTime(now.year, now.month, now.day - 6 + i, 12);
                 final k = dayKey(d.millisecondsSinceEpoch);
                 final isToday = i == 6;
-                final on = days.contains(k);
+                final n = days[k] ?? 0;
+                final on = n > 0;
                 return Column(children: [
                   Text(isToday ? 'HOY' : _wd[d.weekday - 1], style: sora(11, w: FontWeight.w600, color: isToday ? C.text : C.faint)),
                   const SizedBox(height: 6),
@@ -208,7 +211,9 @@ class _StreakHero extends StatelessWidget {
                       border: Border.all(color: on ? fire : (isToday ? C.line2 : C.line), width: isToday && !on ? 1.6 : 1),
                       boxShadow: on ? [BoxShadow(color: fire.withValues(alpha: .6), blurRadius: 14)] : null,
                     ),
-                    child: on ? const Icon(Icons.local_fire_department_rounded, size: 17, color: C.ink) : null,
+                    alignment: Alignment.center,
+                    // how many tasks you did that day
+                    child: on ? Text('$n', style: mono(n > 99 ? 10 : 13, w: FontWeight.w700, color: C.ink)) : null,
                   ),
                 ]);
               }),
@@ -273,9 +278,9 @@ class _NextReward extends StatelessWidget {
       );
     }
     final idx = rewards.indexOf(next);
-    final prev = idx == 0 ? 0 : rewards[idx - 1].days;
-    final frac = ((streak - prev) / (next.days - prev)).clamp(0.0, 1.0);
-    final left = next.days - streak;
+    final prev = idx == 0 ? 0 : rewards[idx - 1].tasks;
+    final frac = ((streak - prev) / (next.tasks - prev)).clamp(0.0, 1.0);
+    final left = next.tasks - streak;
     final color = Color(next.color);
     return Glass(
       padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
@@ -288,7 +293,7 @@ class _NextReward extends StatelessWidget {
             const SizedBox(height: 4),
             Text(next.name, style: sora(22, w: FontWeight.w600, color: color).copyWith(shadows: [Shadow(color: color.withValues(alpha: .5), blurRadius: 16)])),
             const SizedBox(height: 2),
-            Text('Faltan $left ${_daysWord(left)} · se gana a los ${next.days}', style: mono(12, color: C.muted)),
+            Text('${left == 1 ? 'Falta' : 'Faltan'} $left ${_tasksWord(left)} · se gana con ${next.tasks}', style: mono(12, color: C.muted)),
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(99),
@@ -310,7 +315,7 @@ class _NextReward extends StatelessWidget {
               ]),
             ),
             const SizedBox(height: 8),
-            Text('Cada día de racha enciende una estrella.', style: sora(12, color: C.faint)),
+            Text('Cada tarea completada enciende una estrella.', style: sora(12, color: C.faint)),
           ]),
         ),
       ]),
@@ -353,7 +358,6 @@ class _GoalCardState extends State<GoalCard> with SingleTickerProviderStateMixin
     final g = widget.goal;
     final color = Color(g.color);
     final done = g.doneToday;
-    final gs = streakOf(g.days);
     final now = DateTime.now();
     String? targetText;
     Color targetColor = C.faint;
@@ -398,12 +402,6 @@ class _GoalCardState extends State<GoalCard> with SingleTickerProviderStateMixin
                 ],
                 const SizedBox(height: 8),
                 Wrap(spacing: 10, runSpacing: 4, children: [
-                  if (gs > 0)
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.local_fire_department_rounded, size: 14, color: fire),
-                      const SizedBox(width: 3),
-                      Text('$gs', style: mono(12, w: FontWeight.w500, color: fire)),
-                    ]),
                   Text('cumplida ${g.days.length} ${_daysWord(g.days.length)}', style: mono(12, color: C.faint)),
                   if (targetText != null) Text(targetText, style: mono(12, color: targetColor)),
                 ]),
@@ -533,7 +531,7 @@ class _Sky extends StatelessWidget {
           children: [
             for (final r in rewards)
               Builder(builder: (_) {
-                final got = r.days <= best;
+                final got = r.tasks <= best;
                 final color = Color(r.color);
                 return GestureDetector(
                   onTap: got ? () => showRewardUnlock(context, r, replay: true) : null,
@@ -550,7 +548,7 @@ class _Sky extends StatelessWidget {
                       Text(got ? r.name : '???', style: sora(12, w: FontWeight.w600, color: got ? color : C.faint), maxLines: 1, overflow: TextOverflow.ellipsis),
                       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                         if (!got) const Padding(padding: EdgeInsets.only(right: 3), child: Icon(Icons.lock_rounded, size: 10, color: C.faint)),
-                        Text('${r.days} días', style: mono(10, color: C.faint)),
+                        Text('${r.tasks} tareas', style: mono(10, color: C.faint)),
                       ]),
                     ]),
                   ),
@@ -792,7 +790,7 @@ class _RewardOverlayState extends State<_RewardOverlay> with TickerProviderState
                               child: Row(mainAxisSize: MainAxisSize.min, children: [
                                 const Icon(Icons.local_fire_department_rounded, size: 18, color: fire),
                                 const SizedBox(width: 6),
-                                Text('${r.days} días seguidos', style: mono(15, w: FontWeight.w500, color: fire)),
+                                Text('Racha de ${r.tasks} tareas', style: mono(15, w: FontWeight.w500, color: fire)),
                               ]),
                             ),
                             const SizedBox(height: 14),
